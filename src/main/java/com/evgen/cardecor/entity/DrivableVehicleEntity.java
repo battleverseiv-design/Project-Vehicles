@@ -531,7 +531,7 @@ public class DrivableVehicleEntity extends Entity {
 
         this.entityData.define(VEHICLE_HP, MAX_HP);
 
-        this.entityData.define(GEAR, 1);
+        this.entityData.define(GEAR, 0);
         this.entityData.define(FUEL, MAX_FUEL);
         this.entityData.define(SEAT_ITEM_STATUS, (byte) 0);
         this.entityData.define(INSTALLED_WHEELS, (byte) 15);
@@ -4351,6 +4351,7 @@ public class DrivableVehicleEntity extends Entity {
                 this.odeBody.throttleInput = (float) throttle;
                 this.odeBody.steerInput = (float) steer;
                 this.odeBody.handbrakeInput = handbrake;
+                this.odeBody.powertrain.isEngineOn = this.isEngineOn();
                 this.odeBody.powertrain.clutchPedalPressed = hasDriver && (this.inputFlags & 256) != 0;
                 this.odeBody.powertrain.transmissionCondition = this.getTransmissionCondition();
                 for (int i = 0; i < 4; i++) {

@@ -43,13 +43,15 @@ public class ClientEvents {
     private static int lastDirectGearKey = -99;
     private static int shiftUpLatchTicks = 0;
     private static int shiftDownLatchTicks = 0;
+    private static boolean lastShiftUpKeyDown = false;
+    private static boolean lastShiftDownKeyDown = false;
     private static final int SHIFT_LATCH_TICKS = 4;
     private static float cameraShakeDecay = 0.0F;
     private static float lastVehicleVisualYaw = Float.NaN;
     private static int lastVehicleId = -1;
     private static boolean lastGasPressed = false;
     private static boolean lastBrakePressed = false;
-    private static int lastDriverGear = 1;
+    private static int lastDriverGear = 0;
     private static int spaceHoldTicks = 0;
     private static VehicleCabinRainSoundInstance cabinRainSound = null;
     private static VehicleCabinHeaterSoundInstance cabinHeaterSound = null;
@@ -249,10 +251,37 @@ public class ClientEvents {
                     lastDirectGearKey = -99;
                 }
 
+                boolean shiftUpClicked = false;
                 while (ModKeyBindings.KEY_SHIFT_UP.consumeClick()) {
+                    shiftUpClicked = true;
+                }
+                boolean shiftDownClicked = false;
+                while (ModKeyBindings.KEY_SHIFT_DOWN.consumeClick()) {
+                    shiftDownClicked = true;
+                }
+
+                // Прямой опрос клавиш через GLFW для обхода блокировки модификатора KeyModifier.ALT в Forge
+                int upCode = (ModKeyBindings.KEY_SHIFT_UP.getKey().getType() == InputConstants.Type.KEYSYM)
+                        ? ModKeyBindings.KEY_SHIFT_UP.getKey().getValue() : GLFW.GLFW_KEY_R;
+                int downCode = (ModKeyBindings.KEY_SHIFT_DOWN.getKey().getType() == InputConstants.Type.KEYSYM)
+                        ? ModKeyBindings.KEY_SHIFT_DOWN.getKey().getValue() : GLFW.GLFW_KEY_F;
+
+                boolean rawUp = (upCode != GLFW.GLFW_KEY_UNKNOWN) && InputConstants.isKeyDown(winKeys, upCode);
+                if (rawUp && !lastShiftUpKeyDown) {
+                    shiftUpClicked = true;
+                }
+                lastShiftUpKeyDown = rawUp;
+
+                boolean rawDown = (downCode != GLFW.GLFW_KEY_UNKNOWN) && InputConstants.isKeyDown(winKeys, downCode);
+                if (rawDown && !lastShiftDownKeyDown) {
+                    shiftDownClicked = true;
+                }
+                lastShiftDownKeyDown = rawDown;
+
+                if (shiftUpClicked) {
                     shiftUpLatchTicks = SHIFT_LATCH_TICKS;
                 }
-                while (ModKeyBindings.KEY_SHIFT_DOWN.consumeClick()) {
+                if (shiftDownClicked) {
                     shiftDownLatchTicks = SHIFT_LATCH_TICKS;
                 }
 

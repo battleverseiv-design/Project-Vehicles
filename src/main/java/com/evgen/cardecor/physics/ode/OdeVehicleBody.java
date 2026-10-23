@@ -755,7 +755,7 @@ public class OdeVehicleBody {
             wheelStates[i].wheelInertia = effectiveInertia;
             wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, effectiveInertia);
 
-            if (isDriven && !powertrain.clutchPedalPressed && Math.abs(totalRatio) > 0.01f) {
+            if (powertrain.isEngineOn && isDriven && !powertrain.clutchPedalPressed && Math.abs(totalRatio) > 0.01f) {
                 float engineOmega = powertrain.currentRpm * JoltStylePowertrain.RPM_TO_RAD_PER_SEC;
                 wheelStates[i].isClutchLocked = true;
                 wheelStates[i].maxAllowedOmega = engineOmega / totalRatio;

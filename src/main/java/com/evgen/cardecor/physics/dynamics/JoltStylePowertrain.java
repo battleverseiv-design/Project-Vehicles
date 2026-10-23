@@ -23,7 +23,8 @@ public class JoltStylePowertrain {
 
     // Dynamic runtime state
     public float currentRpm;
-    public int currentGear = 1;              // -1 = Reverse, 0 = Neutral, 1..N = Forward gears
+    public int currentGear = 0;              // -1 = Reverse, 0 = Neutral, 1..N = Forward gears
+    public boolean isEngineOn = false;       // Флаг работы двигателя (зажигание)
     public float shiftCooldown = 0.0f;       // Clutch disengagement timer during shifts (seconds)
     public float clutchFriction = 0.0f;      // Telemetry: 0.0 (open) to 1.0 (fully locked)
     public float currentWheelTorqueNm = 0.0f;// Output torque delivered to driven wheels
@@ -302,6 +303,14 @@ public class JoltStylePowertrain {
             mCap = 0.0f;
         }
 
+        // 0. Если зажигание выключено — двигатель заглушен, момент на колеса = 0
+        if (!this.isEngineOn) {
+            this.isClutchLocked = false;
+            this.currentWheelTorqueNm = 0.0f;
+            this.currentRpm = Math.max(0.0f, this.currentRpm - dt * 2500.0f);
+            return 0.0f;
+        }
+
         // 5. Engine Torque Curve
         float normalizedRpm = currentRpm / Math.max(1.0f, spec.maxRpm);
         float torqueCurveFactor;
@@ -335,7 +344,7 @@ public class JoltStylePowertrain {
                 engineOmega = spec.minRpm * RPM_TO_RAD_PER_SEC;
             }
             this.currentRpm = engineOmega * RAD_PER_SEC_TO_RPM;
-            if (this.currentRpm < spec.minRpm && !this.isEngineStalled) {
+            if (!this.isClutchLocked && this.currentRpm < spec.minRpm && !this.isEngineStalled) {
                 this.currentRpm = spec.minRpm;
             }
             return 0.0f;
@@ -370,7 +379,11 @@ public class JoltStylePowertrain {
             // Сцепление жестко заблокировано: валы крутятся как единое целое
             this.isClutchLocked = true;
             clutchTorque = targetLockTorque;
-            engineOmega = Math.max(spec.minRpm * RPM_TO_RAD_PER_SEC, transOmega);
+            engineOmega = transOmega;
+            // Холостой ход двигателя не должен толкать машину вперед на передачах выше 1-й
+            if (driveThrottle < 0.05f && currentGear > 1 && clutchTorque > 0.0f) {
+                clutchTorque = 0.0f;
+            }
         } else {
             // Сцепление пробуксовывает (SLIP): передаем максимальный момент mCap по знаку дельты скоростей
             this.isClutchLocked = false;
@@ -424,20 +437,20 @@ public class JoltStylePowertrain {
                 engineOmega = 0.0f;
                 this.isEngineStalled = true;
             }
-        } else if (currentGear > 0 && clutchPedalPosition < 0.60f && engineOmega < stallOmegaThreshold && driveThrottle < 0.20f && clutchTorque > 35.0f) {
+        } else if (currentGear > 0 && clutchPedalPosition < 0.60f && engineOmega < stallOmegaThreshold && driveThrottle < 0.20f) {
             // Естественное заглохание от нагрузки через компрессию и трение
             engineOmega = Math.max(0.0f, engineOmega - dt * 30.0f);
             if (engineOmega <= 5.0f) {
                 engineOmega = 0.0f;
                 this.isEngineStalled = true;
             }
-        } else if (engineOmega < spec.minRpm * RPM_TO_RAD_PER_SEC && !this.isEngineStalled) {
+        } else if (!this.isClutchLocked && engineOmega < spec.minRpm * RPM_TO_RAD_PER_SEC && !this.isEngineStalled) {
             engineOmega = spec.minRpm * RPM_TO_RAD_PER_SEC;
         }
 
         // Обновляем RPM
         this.currentRpm = engineOmega * RAD_PER_SEC_TO_RPM;
-        if (this.currentRpm < spec.minRpm && !this.isEngineStalled) {
+        if (!this.isClutchLocked && this.currentRpm < spec.minRpm && !this.isEngineStalled) {
             this.currentRpm = spec.minRpm;
         }
 
