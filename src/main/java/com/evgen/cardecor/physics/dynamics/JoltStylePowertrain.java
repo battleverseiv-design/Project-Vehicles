@@ -40,7 +40,8 @@ public class JoltStylePowertrain {
     public float clutchTempCelsius = 30.0f;
     public boolean isClutchLocked = false;       // LCP состояние: сцепление жестко замкнуто
     private int telemetryLogCooldown = 0;
-    public static final float CLUTCH_THERMAL_MASS = 250.0f; // J/K (стальной диск ~0.5 кг * 500)
+    public float prevDeltaOmega = 0.0f;          // Для детекции zero-crossing перехода в LOCKED
+    public static final float CLUTCH_THERMAL_MASS = 2500.0f; // J/K (чугунный маховик + корзина ~5.5 кг)
     public static final float CLUTCH_COOLING_H_A = 4.5f;    // Вт/К (конвективное охлаждение)
     public static final float CLUTCH_AMBIENT = 30.0f;
     public static final float CLUTCH_GLAZE_TEMP = 480.0f;   // порог задымления фрикциона
@@ -299,74 +300,93 @@ public class JoltStylePowertrain {
             engineTorque = -spec.engineBrakingCoeff * 1.6f;
         }
 
-        // 6. Двухрежимный LCP-решатель сцепления (LOCKED vs SLIP) без двойного интегрирования колёс ODE4J
+        // ==================== 6. РЕШАТЕЛЬ СЦЕПЛЕНИЯ (LCP) ====================
         float totalRatio = gearRatio; // gearRatio уже включает передачу и главную пару (differentialRatio)
         float totalRatioSq = Math.max(1.0f, totalRatio * totalRatio);
-
-        // Динамический расчет инерции колес и эквивалентной массы кузова
         float singleWheelInertia = 0.5f * 22.0f * (spec.wheelRadius * spec.wheelRadius);
         float drivenWheelsRotationalInertia = 2.0f * singleWheelInertia;
         float effectiveVehicleLinearInertia = (spec.baseMassKg * 0.45f) * (spec.wheelRadius * spec.wheelRadius);
-
-        // Приведенная к валу сцепления инерция трансмиссии
         float it = (drivenWheelsRotationalInertia + effectiveVehicleLinearInertia) / totalRatioSq;
         it = Math.max(0.04f, it);
 
         float engineOmega = currentRpm * RPM_TO_RAD_PER_SEC;
         float transmissionOmega = avgWheelAngularVel * totalRatio;
         float deltaOmega = engineOmega - transmissionOmega;
-
         float clutchTorque = 0.0f;
-        boolean pedalEngaged = (clutchPedal < 0.20f);
+
+        boolean pedalEngaged = (clutchPedal < 0.15f); // Педаль отпущена
         boolean inGear = (currentGear != 0);
 
-        // Если выжато сцепление, идет переключение или включена нейтраль — сцепление всегда разомкнуто
+        // Сбрасываем блокировку при выжатом сцеплении или переключении
         if (!pedalEngaged || !inGear || shiftCooldown > 0.0f) {
             this.isClutchLocked = false;
         }
 
-        // Порог надежного схватывания: разница скоростей < 25 рад/с (~240 RPM)
-        if (inGear && pedalEngaged && shiftCooldown <= 0.0f && (this.isClutchLocked || Math.abs(deltaOmega) < 25.0f)) {
-            // ---------------- РЕЖИМ: LOCKED (Жесткая механическая связь) ----------------
-            float iEngine = Math.max(0.01f, spec.engineInertia);
+        // Предварительный расчет требуемого момента для синхронизации (за 1 шаг dt)
+        float iEngine = Math.max(0.01f, spec.engineInertia);
+        float invMeff = (1.0f / iEngine) + (1.0f / it);
+        float mEff = 1.0f / invMeff;
+        float targetTorque = (mEff * deltaOmega) / dt;
+
+        // Условия для перехода в LOCKED:
+        // 1. Момент сцепления способен удержать двигатель (|targetTorque| <= mCap)
+        // 2. Пересечение нуля (скорости сравнялись при prevDeltaOmega != 0)
+        // 3. Мы уже в LOCKED и момент не превышает статический лимит
+        boolean canLock = Math.abs(targetTorque) <= mCap;
+        boolean zeroCrossing = (prevDeltaOmega != 0.0f && deltaOmega * prevDeltaOmega <= 0.0f);
+
+        if (inGear && pedalEngaged && shiftCooldown <= 0.0f && (this.isClutchLocked || canLock || zeroCrossing)) {
+            // ---------------- РЕЖИМ: LOCKED (Жесткая связь) ----------------
             float iTotal = iEngine + it;
 
-            // Чистый удерживающий момент от двигателя без двойного сопротивления дороги (его считает ODE4J)
+            // В LOCKED дорога сопротивляется, но мы отдаем полный момент двигателя (с поправкой на инерцию)
             float internalHoldTorque = (it / iTotal) * engineTorque;
-            float staticBreakawayCap = mCap * 1.35f;
+            float staticBreakawayCap = mCap * 1.35f; // Статическое трение выше динамического
 
             if (Math.abs(internalHoldTorque) <= staticBreakawayCap) {
                 this.isClutchLocked = true;
                 clutchTorque = internalHoldTorque;
 
-                // Двигатель жестко следует за трансмиссией
-                float targetEngineOmega = Math.max(spec.minRpm * RPM_TO_RAD_PER_SEC, transmissionOmega);
-                engineOmega = Mth.lerp(0.35f, engineOmega, targetEngineOmega);
-                deltaOmega = 0.0f; // сцепление зажато — нулевой нагрев!
+                // Двигатель ЖЕСТКО привязан к колесам
+                engineOmega = Math.max(spec.minRpm * RPM_TO_RAD_PER_SEC, transmissionOmega);
+                deltaOmega = 0.0f;
             } else {
-                this.isClutchLocked = false; // срыв в букс при перегрузке
+                this.isClutchLocked = false; // Пробуксовка при перегрузке
             }
         }
 
         if (!this.isClutchLocked) {
-            // ---------------- РЕЖИМ: SLIP (Проскальзывание сцепления) ----------------
-            float iEngine = Math.max(0.01f, spec.engineInertia);
+            // ---------------- РЕЖИМ: SLIP (Пробуксовка) ----------------
             float omegaEFree = engineOmega + (engineTorque / iEngine) * dt;
-            float omegaTFree = transmissionOmega;
+            float deltaOmegaFree = omegaEFree - transmissionOmega;
+            float slipTargetTorque = (mEff * deltaOmegaFree) / dt;
 
-            float invMeff = (1.0f / iEngine) + (1.0f / it);
-            float mEff = 1.0f / invMeff;
+            if (!Float.isFinite(slipTargetTorque)) slipTargetTorque = 0.0f;
 
-            float deltaOmegaFree = omegaEFree - omegaTFree;
-            float targetTorque = (mEff * deltaOmegaFree) / dt;
-            if (!Float.isFinite(targetTorque)) {
-                targetTorque = 0.0f;
-            }
-
-            clutchTorque = Mth.clamp(targetTorque, -mCap, mCap);
-
-            // Обновляем только маховик двигателя
+            clutchTorque = Mth.clamp(slipTargetTorque, -mCap, mCap);
             engineOmega = omegaEFree - (clutchTorque / iEngine) * dt;
+        }
+
+        // ==================== 7. ВЫДАЧА МОМЕНТА И ТЕРМОДИНАМИКА ====================
+        // Передаем момент на колёса (для ODE4J)
+        this.currentWheelTorqueNm = clutchTorque * gearRatio * spec.transmissionEfficiency;
+
+        // Считаем нагрев сцепления ТОЛЬКО если есть реальная разница скоростей
+        float realDeltaOmega = this.isClutchLocked ? 0.0f : Math.abs(engineOmega - transmissionOmega);
+        float pHeat = Math.abs(clutchTorque) * realDeltaOmega;
+
+        // Интегрируем температуру (теперь с нормальной теплоемкостью 2500 Дж/К)
+        float pCool = spec.clutchCoolingH_A * (clutchTempCelsius - CLUTCH_AMBIENT);
+        clutchTempCelsius += ((pHeat - pCool) / CLUTCH_THERMAL_MASS) * dt;
+        clutchTempCelsius = Math.max(CLUTCH_AMBIENT, clutchTempCelsius);
+
+        // Падение коэффициента трения при перегреве
+        float tempMuFactor = 1.0f - 0.4f * Mth.clamp((clutchTempCelsius - 200.0f) / 300.0f, 0.0f, 1.0f);
+        this.clutchFrictionMultiplier = tempMuFactor;
+        this.isClutchBurning = clutchTempCelsius > CLUTCH_GLAZE_TEMP;
+        if (clutchTempCelsius > CLUTCH_BURN_TEMP) {
+            this.transmissionCondition = Math.max(0.0f,
+                this.transmissionCondition - dt * (clutchTempCelsius - CLUTCH_BURN_TEMP) * 0.015f);
         }
 
         // Телеметрия и диагностическое логирование
@@ -375,16 +395,13 @@ public class JoltStylePowertrain {
                 this.telemetryLogCooldown = 20; // 4 раза в секунду при 80 Гц
                 System.out.printf(java.util.Locale.ROOT,
                     "[ДИАГНОСТИКА] Gear=%d | RPM=%.0f | Speed=%.1f km/h | TotalRatio=%.2f | mCap=%.1f | ClTorque=%.1f | WheelTorque=%.1f | State=%s%n",
-                    currentGear, currentRpm, (forwardSpeedMps * 3.6f), totalRatio, mCap,
-                    clutchTorque, (clutchTorque * gearRatio * spec.transmissionEfficiency), (this.isClutchLocked ? "LOCKED" : "SLIP"));
+                    currentGear, (engineOmega * RAD_PER_SEC_TO_RPM), (forwardSpeedMps * 3.6f), totalRatio, mCap,
+                    clutchTorque, this.currentWheelTorqueNm, (this.isClutchLocked ? "LOCKED" : "SLIP"));
             }
         }
 
-        // 7. Физика старта с высокой передачи, тепловой баланс и детерминированный Engine Stall
+        // Физика старта с высокой передачи, тепловой баланс и детерминированный Engine Stall
         boolean isStopped = Math.abs(forwardSpeedMps) < 0.5f && Math.abs(avgWheelAngularVel) < 1.0f;
-        deltaOmega = this.isClutchLocked ? 0.0f : Math.abs(engineOmega - transmissionOmega);
-        updateClutchThermal(clutchTorque, deltaOmega, dt);
-
         float stallOmegaThreshold = spec.engineStallRpm * RPM_TO_RAD_PER_SEC;
 
         if (isStopped && currentGear >= 3 && clutchPedal < 0.60f && driveThrottle < 0.65f) {
@@ -404,7 +421,15 @@ public class JoltStylePowertrain {
         } else if (engineOmega < spec.minRpm * RPM_TO_RAD_PER_SEC && !this.isEngineStalled) {
             engineOmega = spec.minRpm * RPM_TO_RAD_PER_SEC;
         }
-        currentRpm = engineOmega * RAD_PER_SEC_TO_RPM;
+
+        // Обновляем RPM
+        this.currentRpm = engineOmega * RAD_PER_SEC_TO_RPM;
+        if (this.currentRpm < spec.minRpm && !this.isEngineStalled) {
+            this.currentRpm = spec.minRpm;
+        }
+
+        // Запоминаем deltaOmega для детекции zero-crossing на следующем шаге
+        this.prevDeltaOmega = engineOmega - transmissionOmega;
 
         // 8. Детерминированное выбивание передачи в нейтраль при механическом износе (< 40%)
         if (transmissionCondition < 40.0f && currentGear > 0 && Math.abs(clutchTorque) > 90.0f) {

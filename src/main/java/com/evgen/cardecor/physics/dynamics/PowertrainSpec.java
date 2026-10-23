@@ -31,7 +31,9 @@ public class PowertrainSpec {
     public float clutchStrength = 2.0f;          // Slip-mode clutch plate stiffness (Euler stable at 80 Hz)
     public float clutchFrictionCoeff = 0.38f;    // mu [-] (Coulomb friction coefficient)
     public float clutchEffectiveRadius = 0.100f; // R_eff [m] (effective friction radius)
-    public float clutchMaxClampingForce = 5800.0f; // F_n,max [N] (diaphragm spring max clamp)
+    public float clutchMaxClampingForce = 9500.0f; // F_n,max [N] (diaphragm spring max clamp)
+    public float clutchCoolingH_A = 4.5f;        // W/K (convective clutch cooling)
+    public static final float CLUTCH_THERMAL_MASS = 2500.0f; // J/K (flywheel + clutch basket ~5.5 kg cast iron)
     public int clutchPlatesCount = 2;            // z [-] (friction surfaces count)
     public float engineStallRpm = 380.0f;        // Stall threshold below which combustion fails
     public float shiftDurationUp = 0.18f;        // Upshift clutch disengagement (seconds)
