@@ -1,0 +1,184 @@
+{
+  "id": "jurassic_jeep",
+  "name": "Джип Парка Юрского периода",
+  "category": "car",
+  "default_engine": "amc_4_0_i6",
+  "scale": 2.0,
+  "ground_offset_y": 0.0,
+  "models": {
+    "chassis": "models/chassis.obj",
+    "wheel": "models/wheel.obj",
+    "steering_wheel": "models/steering_wheel.obj"
+  },
+  "textures": {
+    "chassis": "textures/wrangler.png"
+  },
+  "wheels": {
+    "radius": 0.5,
+    "width": 0.375,
+    "wheel_hp": 160.0,
+    "health": 160.0,
+    "front_left": [
+      -0.4844,
+      0.25,
+      -0.875
+    ],
+    "front_right": [
+      0.4844,
+      0.25,
+      -0.875
+    ],
+    "rear_left": [
+      -0.4844,
+      0.25,
+      0.6875
+    ],
+    "rear_right": [
+      0.4844,
+      0.25,
+      0.6875
+    ],
+    "frontLeft": [
+      -0.4844,
+      0.25,
+      -0.875
+    ],
+    "frontRight": [
+      0.4844,
+      0.25,
+      -0.875
+    ],
+    "rearLeft": [
+      -0.4844,
+      0.25,
+      0.6875
+    ],
+    "rearRight": [
+      0.4844,
+      0.25,
+      0.6875
+    ]
+  },
+  "steering_wheel": {
+    "enabled": true,
+    "pos": [
+      -0.2656,
+      0.7985,
+      -0.0897
+    ],
+    "tilt_angle_deg": -31.75,
+    "rotation_multiplier": 12.0
+  },
+  "animations": [],
+  "seats": [
+    {
+      "seatIndex": 0,
+      "name": "Водитель",
+      "is_driver": true,
+      "isDriver": true,
+      "pos": [
+        -0.28,
+        0.1,
+        0.15
+      ],
+      "dismount_offset": [
+        -1.35,
+        0.0,
+        0.15
+      ]
+    },
+    {
+      "seatIndex": 1,
+      "name": "Пассажир",
+      "is_driver": false,
+      "isDriver": false,
+      "pos": [
+        0.28,
+        0.1,
+        0.15
+      ],
+      "dismount_offset": [
+        1.35,
+        0.0,
+        0.15
+      ]
+    }
+  ],
+  "physics": {
+    "mass_kg": 1550.0,
+    "horsepower": 190.0,
+    "torque_nm": 310.0,
+    "max_speed_kmh": 130.0,
+    "drivetrain": "awd",
+    "engine_type": "i6",
+    "wheelbase": 3.125,
+    "track_width": 1.9376,
+    "wheel_radius": 0.5,
+    "steering_angle_deg": 38.0,
+    "steering_response": 1.2,
+    "turn_in_bite": 1.15,
+    "steering_agility": 1.15,
+    "offroad_capability": 1.8,
+    "suspension_stiffness": 1.25,
+    "suspension_damping": 1.0,
+    "ride_height": 0.0,
+    "max_suspension_travel": 0.18,
+    "body_roll_factor": 0.8,
+    "pitch_dive_factor": 0.9,
+    "anti_roll_bar_stiffness": 1.5,
+    "center_of_gravity_height": 0.5,
+    "idle_rpm": 850,
+    "redline_rpm": 6500,
+    "fuel_capacity_liters": 65.0,
+    "brake_power": 24000.0,
+    "gears": 5
+  },
+  "sounds": {
+    "engine_type": "i6",
+    "master_volume": 1.15,
+    "pitch_multiplier": 1.0,
+    "rpm_idle_to_low": 1600.0,
+    "rpm_low_to_mid": 2800.0,
+    "rpm_mid_to_high": 4200.0,
+    "rpm_high_to_max": 5600.0,
+    "crossfade_curve": "equal_power",
+    "temporal_smoothing": 0.22,
+    "tire_explode_sound": "cardecor:tire_explode",
+    "tire_explode_volume": 2.0,
+    "tire_explode_pitch": 1.0
+  },
+  "engine": {
+    "name": "AMC 4.0L High Output Inline-6",
+    "type": "i6",
+    "horsepower": 190.0,
+    "torque_nm": 310.0,
+    "idle_rpm": 850.0,
+    "redline_rpm": 6500.0
+  },
+  "trunk": {
+    "rows": 3
+  },
+  "headlights": {
+    "light_level": 15,
+    "offset_z": -1.32,
+    "flare_size": 0.14,
+    "range": 28.0,
+    "beam_width": 0.48,
+    "height_offset": 0.55
+  },
+  "camera": {
+    "shake_intensity": 0.35,
+    "look_ahead": 0.1,
+    "cornering_bank": 0.2,
+    "pitch_follow": 0.7,
+    "roll_follow": 0.45
+  },
+  "hitboxes": {
+    "body_damage_multiplier": 0.35,
+    "window_damage_multiplier": 1.0,
+    "wheel_damage_multiplier": 0.8,
+    "engine_damage_multiplier": 1.0,
+    "trunk_damage_multiplier": 0.4,
+    "tire_health": 60.0
+  }
+}

@@ -1,0 +1,257 @@
+{
+  "id": "vintage_pickup",
+  "name": "Винтажный Пикап",
+  "category": "pickup",
+  "default_engine": "ford_302_v8",
+  "default_wheel": "offroad_heavy_wheel",
+  "default_dirt_level": 20.0,
+  "default_tire_condition": 35.0,
+  "models": {
+    "chassis": "models/pickup_chassis.obj",
+    "wheel": "models/pickup_wheel.obj",
+    "steering_wheel": "models/pickup_steering_wheel.obj"
+  },
+  "textures": {
+    "chassis": "textures/pickup_skin.png",
+    "wheel": "textures/pickup_wheel.png"
+  },
+  "physics": {
+    "mass_kg": 2150.0,
+    "horsepower": 160.0,
+    "torque_nm": 340.0,
+    "drivetrain": "rwd",
+    "engine_type": "v8_muscle",
+    "max_speed_kmh": 95.0,
+    "boost_speed_kmh": 115.0,
+    "gears": 4,
+    "final_drive": 4.10,
+    "gear_ratios": [4.00, 2.40, 1.45, 1.00],
+    "reverse_ratio": 3.80,
+    "steering_angle_deg": 35.0,
+    "steering_response": 0.95,
+    "turn_in_bite": 0.95,
+    "suspension_stiffness": 1.10,
+    "body_roll_factor": 0.85,
+    "offroad_capability": 1.45,
+    "steer_curve_speed": 36.0,
+    "steer_curve_power": 1.35,
+    "steer_min_ratio": 0.25,
+    "wheelbase": 3.15,
+    "track_width": 1.80,
+    "wheel_radius": 0.40,
+    "tire_pressure_fl": 2.2,
+    "tire_pressure_fr": 2.2,
+    "tire_pressure_rl": 2.2,
+    "tire_pressure_rr": 2.2,
+    "aspiration_type": "na",
+    "boost_pressure_bar": 0.0,
+    "supercharger_pulley": 1.0,
+    "idle_rpm": 650,
+    "redline_rpm": 4400,
+    "front_overhang": 0.9,
+    "rear_overhang": 1.25,
+    "drag_coefficient": 0.52,
+    "frontal_area": 2.4,
+    "downforce_coefficient": 0.10,
+    "body_shake_intensity": 0.35,
+    "camera_shake_intensity": 0.25,
+    "turbo_spool_rpm": 4500.0,
+    "turbo_peak_rpm": 5500.0,
+    "steering_agility": 1.05,
+    "fuel_capacity_liters": 75.0,
+    "ride_height": 0.0,
+    "weight_dip_sensitivity": 0.75,
+    "suspension_damping": 1.0,
+    "max_suspension_travel": 0.18,
+    "pitch_dive_factor": 1.05,
+    "anti_roll_bar_stiffness": 1.35,
+    "weight_distribution_front": 0.56,
+    "center_of_gravity_height": 0.60,
+    "brake_power": 24000.0
+  },
+  "scale": 1.0,
+  "ground_offset_y": 0.0,
+  "wheelbase": 3.15,
+  "wheels": {
+    "radius": 0.42,
+    "wheel_hp": 220.0,
+    "front_left": [
+      0.973,
+      0.42,
+      -2.057
+    ],
+    "front_right": [
+      -0.987,
+      0.453,
+      -2.057
+    ],
+    "rear_left": [
+      0.974,
+      0.438,
+      1.255
+    ],
+    "rear_right": [
+      -0.986,
+      0.438,
+      1.255
+    ]
+  },
+  "steering_wheel": {
+    "enabled": true,
+    "pos": [
+      0.45,
+      1.36,
+      -0.88
+    ],
+    "tilt_angle_deg": 0.0,
+    "rotation_multiplier": 15.0
+  },
+  "seats": [
+    {
+      "seatIndex": 0,
+      "name": "Водитель",
+      "pos": [
+        0.45,
+        0.22,
+        -0.45
+      ],
+      "is_driver": true,
+      "allow_weapons": false,
+      "lock_yaw": true,
+      "yaw_offset_deg": 0.0,
+      "dismount_offset": [
+        1.2,
+        0.0,
+        -0.25
+      ],
+      "can_dismount": true
+    },
+    {
+      "seatIndex": 1,
+      "name": "Передний пассажир",
+      "pos": [
+        -0.45,
+        0.22,
+        -0.25
+      ],
+      "is_driver": false,
+      "allow_weapons": true,
+      "lock_yaw": true,
+      "yaw_offset_deg": 0.0,
+      "dismount_offset": [
+        -1.2,
+        0.0,
+        -0.25
+      ],
+      "can_dismount": true
+    },
+    {
+      "seatIndex": 2,
+      "name": "Кузов (Стрелок 360°)",
+      "pos": [
+        0.0,
+        0.22,
+        1.35
+      ],
+      "is_driver": false,
+      "allow_weapons": true,
+      "lock_yaw": false,
+      "yaw_offset_deg": 0.0,
+      "dismount_offset": [
+        0.0,
+        0.0,
+        1.35
+      ],
+      "can_dismount": true
+    }
+  ],
+  "hitboxes": {
+    "body_damage_multiplier": 0.353,
+    "wheel_damage_multiplier": 0.8,
+    "window_damage_multiplier": 1.0,
+    "engine_damage_multiplier": 0.85,
+    "trunk_damage_multiplier": 0.4,
+    "tire_health": 50.0
+  },
+  "sounds": {
+    "engine_type": "v8_muscle",
+    "master_volume": 1.0,
+    "pitch_multiplier": 1.0,
+    "tire_explode_sound": "cardecor:tire_explode",
+    "tire_explode_volume": 2.4,
+    "tire_explode_pitch": 0.95,
+    "tire_deflate_sound": "cardecor:tire_deflate",
+    "tire_deflate_volume": 1.30,
+    "tire_deflate_pitch": 0.95,
+    "temporal_smoothing": 0.22,
+    "rpm_idle_to_low": 1800.0,
+    "rpm_low_to_mid": 3300.0,
+    "rpm_mid_to_high": 4800.0,
+    "rpm_high_to_max": 6200.0
+  },
+  "engine_start": {
+    "start_chance": 0.5,
+    "crank_ticks": 28,
+    "fail_allowed": true
+  },
+  "engine": {
+    "name": "1950s Naturally Aspirated V8",
+    "type": "legacy_pickup",
+    "horsepower": 110.0,
+    "torque_nm": 320.0,
+    "idle_rpm": 650.0,
+    "redline_rpm": 5200.0,
+    "starter": {
+      "start_chance": 0.65,
+      "crank_ticks": 28,
+      "fail_allowed": true
+    },
+    "sounds": {
+      "engine_type": "legacy_pickup",
+      "master_volume": 1.0
+    }
+  },
+  "camera": {
+    "shake_intensity": 0.35,
+    "look_ahead": 0.1,
+    "cornering_bank": 0.2,
+    "pitch_follow": 0.7,
+    "roll_follow": 0.45
+  },
+  "calibrated_bounds": {
+    "front_dist": 2.85,
+    "rear_dist": 2.85,
+    "half_width": 1.15,
+    "hood_height": 1.28,
+    "roof_height": 2.15,
+    "trunk_height": 1.05,
+    "bumper_step_height": 0.55,
+    "cabin_front_z": -1.48,
+    "cabin_rear_z": 0.45,
+    "total_height": 2.15,
+    "has_cargo_bed": true,
+    "has_roof": true,
+    "bed_floor_height": 0.75,
+    "windshield_bottom_z": -1.48,
+    "windshield_top_z": -1.28,
+    "windshield_bottom_y": 1.36,
+    "windshield_top_y": 1.82
+  },
+  "durability": {
+    "max_bumper_health": 100.0,
+    "max_hood_health": 100.0,
+    "max_radiator_health": 100.0
+  },
+  "ramming": {
+    "recoil_damage_mult": 1.0,
+    "damage_dealt_mult": 1.0,
+    "momentum_retention": 0.95,
+    "hood_launch_vertical_mult": 1.0,
+    "hood_launch_forward_mult": 1.0,
+    "wheel_crush_drag_mult": 1.0,
+    "side_swipe_spin_mult": 1.0,
+    "camera_trauma_mult": 1.0,
+    "blood_accumulation_mult": 1.0,
+    "can_deform_metal": true
+  }
+}

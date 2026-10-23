@@ -1,0 +1,9 @@
+{
+  "id": "sport_bucket_seat",
+  "name": "Спортивный ковш (Racing)",
+  "type": "bucket",
+  "author": "CarDecor",
+  "comfort_factor": 0.9,
+  "sitting_height_offset": -0.04,
+  "mass_kg": 8.5
+}

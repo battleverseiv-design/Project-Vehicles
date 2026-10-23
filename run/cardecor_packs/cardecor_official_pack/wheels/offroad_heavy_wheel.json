@@ -1,0 +1,15 @@
+{
+  "id": "offroad_heavy_wheel",
+  "name": "Внедорожное колесо All-Terrain (16\")",
+  "type": "offroad",
+  "author": "CarDecor",
+  "radius": 0.42,
+  "width": 0.26,
+  "grip_asphalt": 0.88,
+  "grip_dirt": 1.25,
+  "grip_ice": 0.45,
+  "mass_kg": 24.0,
+  "durability_hp": 220.0,
+  "model": "models/pickup_wheel.obj",
+  "texture": "textures/pickup_wheel.png"
+}

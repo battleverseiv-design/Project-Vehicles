@@ -1,0 +1,1135 @@
+{
+  "vintage_engine": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:vintage_engine_loop",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 48
+      }
+    ]
+  },
+  "vintage_engine_start": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:vintage_engine_start",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 36
+      }
+    ]
+  },
+  "vintage_engine_crank_fail": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:vintage_engine_crank_fail",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "tire_screech": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:tire_screech",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "engine_loop_1": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_1",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "engine_loop_2": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_2",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "engine_loop_3": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_3",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "engine_loop_4": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_4",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "engine_loop_5": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_5",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "engine_loop_6": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_6",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "engine_loop_7": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_7",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "engine_loop_8": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_8",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "engine_loop_9": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_loop_9",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "car_horn": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_horn_1",
+        "stream": false,
+        "volume": 5.0,
+        "attenuation_distance": 150
+      }
+    ]
+  },
+  "car_crash_heavy": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:car_crash_1",
+        "stream": false,
+        "volume": 3.2,
+        "attenuation_distance": 80
+      },
+      {
+        "name": "cardecor:car_crash_2",
+        "stream": false,
+        "volume": 3.2,
+        "attenuation_distance": 80
+      },
+      {
+        "name": "cardecor:car_crash_3",
+        "stream": false,
+        "volume": 3.2,
+        "attenuation_distance": 80
+      }
+    ]
+  },
+  "car_impact_light": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:suspension_creak_1",
+        "stream": false,
+        "volume": 1.36,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:suspension_creak_2",
+        "stream": false,
+        "volume": 1.36,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:suspension_creak_3",
+        "stream": false,
+        "volume": 1.36,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:suspension_creak_4",
+        "stream": false,
+        "volume": 1.36,
+        "attenuation_distance": 36
+      }
+    ]
+  },
+  "car_suspension_creak": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:suspension_creak_1",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:suspension_creak_2",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:suspension_creak_3",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:suspension_creak_4",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 36
+      }
+    ]
+  },
+  "car_landing_heavy": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:car_landing_heavy_1",
+        "stream": false,
+        "volume": 1.25,
+        "attenuation_distance": 45
+      },
+      {
+        "name": "cardecor:car_landing_heavy_2",
+        "stream": false,
+        "volume": 1.25,
+        "attenuation_distance": 45
+      },
+      {
+        "name": "cardecor:car_landing_heavy_3",
+        "stream": false,
+        "volume": 1.25,
+        "attenuation_distance": 45
+      },
+      {
+        "name": "cardecor:car_landing_heavy_4",
+        "stream": false,
+        "volume": 1.25,
+        "attenuation_distance": 45
+      }
+    ]
+  },
+  "car_landing_light": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:car_landing_light",
+        "stream": false,
+        "volume": 0.9,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:suspension_creak_1",
+        "stream": false,
+        "volume": 0.8,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:suspension_creak_2",
+        "stream": false,
+        "volume": 0.8,
+        "attenuation_distance": 36
+      }
+    ]
+  },
+  "engine_kickdown": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_kickdown",
+        "stream": false,
+        "volume": 1.25,
+        "attenuation_distance": 90
+      }
+    ]
+  },
+  "blue_sedan_start": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:blue_sedan/start",
+        "stream": false,
+        "volume": 1.15,
+        "attenuation_distance": 60
+      }
+    ]
+  },
+  "blue_sedan_idle": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:blue_sedan/idle",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 80
+      }
+    ]
+  },
+  "blue_sedan_low": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:blue_sedan/low",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 90
+      }
+    ]
+  },
+  "blue_sedan_mid": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:blue_sedan/mid",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "blue_sedan_high": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:blue_sedan/high",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 110
+      }
+    ]
+  },
+  "blue_sedan_max": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:blue_sedan/max",
+        "stream": false,
+        "volume": 1.05,
+        "attenuation_distance": 110
+      }
+    ]
+  },
+  "amc_i6_idle": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:amc_i6/idle",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 80
+      }
+    ]
+  },
+  "amc_i6_low": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:amc_i6/low",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 90
+      }
+    ]
+  },
+  "amc_i6_mid": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:amc_i6/mid",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 100
+      }
+    ]
+  },
+  "amc_i6_high": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:amc_i6/high",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 110
+      }
+    ]
+  },
+  "amc_i6_max": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:amc_i6/max",
+        "stream": false,
+        "volume": 1.05,
+        "attenuation_distance": 110
+      }
+    ]
+  },
+  "tire_explode": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:tire_explode_1",
+        "stream": false,
+        "volume": 2.5,
+        "attenuation_distance": 80
+      },
+      {
+        "name": "cardecor:tire_explode_2",
+        "stream": false,
+        "volume": 2.5,
+        "attenuation_distance": 80
+      },
+      {
+        "name": "cardecor:tire_explode_3",
+        "stream": false,
+        "volume": 2.5,
+        "attenuation_distance": 80
+      },
+      {
+        "name": "cardecor:tire_explode_4",
+        "stream": false,
+        "volume": 2.5,
+        "attenuation_distance": 80
+      }
+    ]
+  },
+  "wheel_hub_grind": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:wheel_hub_grind",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 38
+      }
+    ]
+  },
+  "tire_deflate": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:tire_deflate_1",
+        "stream": false,
+        "volume": 1.2,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:tire_deflate_2",
+        "stream": false,
+        "volume": 1.2,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:tire_deflate_3",
+        "stream": false,
+        "volume": 1.2,
+        "attenuation_distance": 36
+      },
+      {
+        "name": "cardecor:tire_deflate_4",
+        "stream": false,
+        "volume": 1.2,
+        "attenuation_distance": 36
+      }
+    ]
+  },
+  "tire_roll_dirt": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:tire_roll_dirt",
+        "stream": false,
+        "volume": 1.45,
+        "attenuation_distance": 50
+      }
+    ]
+  },
+  "tire_roll_road": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:tire_roll_road",
+        "stream": false,
+        "volume": 1.4,
+        "attenuation_distance": 50
+      }
+    ]
+  },
+  "car_explode": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:car_explode_1",
+        "stream": false,
+        "volume": 2.8,
+        "attenuation_distance": 160
+      },
+      {
+        "name": "cardecor:car_explode_2",
+        "stream": false,
+        "volume": 2.8,
+        "attenuation_distance": 160
+      },
+      {
+        "name": "cardecor:car_explode_3",
+        "stream": false,
+        "volume": 2.8,
+        "attenuation_distance": 160
+      },
+      {
+        "name": "cardecor:car_explode_4",
+        "stream": false,
+        "volume": 2.8,
+        "attenuation_distance": 160
+      }
+    ]
+  },
+  "brake_hard": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:brake_hard_1",
+        "stream": false,
+        "volume": 1.15,
+        "attenuation_distance": 48
+      },
+      {
+        "name": "cardecor:brake_hard_2",
+        "stream": false,
+        "volume": 1.15,
+        "attenuation_distance": 48
+      }
+    ]
+  },
+  "brake_slow": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:brake_slow",
+        "stream": false,
+        "volume": 0.95,
+        "attenuation_distance": 36
+      }
+    ]
+  },
+  "gear_shift": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:gear_shift_1",
+        "stream": false,
+        "volume": 1.1,
+        "attenuation_distance": 40
+      },
+      {
+        "name": "cardecor:gear_shift_2",
+        "stream": false,
+        "volume": 1.1,
+        "attenuation_distance": 40
+      },
+      {
+        "name": "cardecor:gear_shift_3",
+        "stream": false,
+        "volume": 1.1,
+        "attenuation_distance": 40
+      },
+      {
+        "name": "cardecor:gear_shift_4",
+        "stream": false,
+        "volume": 1.1,
+        "attenuation_distance": 40
+      }
+    ]
+  },
+  "starter_i6": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:starter_i6",
+        "stream": false,
+        "volume": 1.2,
+        "attenuation_distance": 48
+      }
+    ]
+  },
+  "starter_i4": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:starter_i4",
+        "stream": false,
+        "volume": 1.2,
+        "attenuation_distance": 48
+      }
+    ]
+  },
+  "starter_v8": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:starter_v8",
+        "stream": false,
+        "volume": 1.2,
+        "attenuation_distance": 48
+      }
+    ]
+  },
+  "pickup_engine_0": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:pickup_engine_0",
+        "stream": false,
+        "volume": 1.45,
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "pickup_engine_1": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:pickup_engine_1",
+        "stream": false,
+        "volume": 1.45,
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "pickup_engine_2": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:pickup_engine_2",
+        "stream": false,
+        "volume": 1.45,
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "pickup_engine_3": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:pickup_engine_3",
+        "stream": false,
+        "volume": 1.45,
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "pickup_engine_4": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:pickup_engine_4",
+        "stream": false,
+        "volume": 1.45,
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "engine_stop_i6": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_stop_i6",
+        "stream": false,
+        "volume": 1.3,
+        "attenuation_distance": 55
+      }
+    ]
+  },
+  "engine_stop_v8": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:engine_stop_v8",
+        "stream": false,
+        "volume": 1.35,
+        "attenuation_distance": 55
+      }
+    ]
+  },
+  "car_step_hood": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:footsteps/hood_step_1",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/hood_step_2",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/hood_step_3",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/hood_step_4",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      }
+    ]
+  },
+  "car_step_roof": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:footsteps/roof_step_1",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/roof_step_2",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/roof_step_3",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/roof_step_4",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/roof_step_5",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      }
+    ]
+  },
+  "car_step_trunk": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:footsteps/trunk_step_1",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/trunk_step_2",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/trunk_step_3",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/trunk_step_4",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "cardecor:footsteps/trunk_step_5",
+        "stream": false,
+        "volume": 0.85,
+        "attenuation_distance": 24
+      }
+    ]
+  },
+  "car_hit_entity": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:impacts/car_hit_entity_1",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 28
+      },
+      {
+        "name": "cardecor:impacts/car_hit_entity_2",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 28
+      },
+      {
+        "name": "cardecor:impacts/car_hit_entity_3",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 28
+      },
+      {
+        "name": "cardecor:impacts/car_hit_entity_4",
+        "stream": false,
+        "volume": 1.0,
+        "attenuation_distance": 28
+      }
+    ]
+  },
+  "bullet_metal_hit": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "cardecor:impacts/bullet_metal_hit_1",
+        "stream": false,
+        "volume": 2.5,
+        "attenuation_distance": 70
+      },
+      {
+        "name": "cardecor:impacts/bullet_metal_hit_2",
+        "stream": false,
+        "volume": 2.5,
+        "attenuation_distance": 70
+      },
+      {
+        "name": "cardecor:impacts/bullet_metal_hit_3",
+        "stream": false,
+        "volume": 2.5,
+        "attenuation_distance": 70
+      },
+      {
+        "name": "cardecor:impacts/bullet_metal_hit_4",
+        "stream": false,
+        "volume": 2.5,
+        "attenuation_distance": 70
+      }
+    ]
+  },
+  "car_enter": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_enter_1",
+        "stream": false,
+        "volume": 1.0
+      },
+      {
+        "name": "cardecor:car_enter_2",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "car_exit": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_exit_1",
+        "stream": false,
+        "volume": 1.0
+      },
+      {
+        "name": "cardecor:car_exit_2",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "trunk_open_sedan": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:trunk_open_sedan",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "trunk_close_sedan": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:trunk_close_sedan",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "trunk_open_pickup": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:trunk_open_pickup",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "trunk_close_pickup": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:trunk_close_pickup",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "headlights_on": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:headlights_on",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "headlights_off": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:headlights_off",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "car_lock_pin_down": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_lock_pin_down",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "car_unlock_pin_up": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_unlock_pin_up",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "car_unlock_key": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_unlock_key",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "car_door_locked_yank": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_door_locked_yank",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "key_insert": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:key_insert",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "key_remove": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:key_remove",
+        "stream": false,
+        "volume": 1.0
+      }
+    ]
+  },
+  "brake_pedal": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:brake_pedal_1",
+        "volume": 0.68,
+        "stream": false
+      },
+      {
+        "name": "cardecor:brake_pedal_2",
+        "volume": 0.68,
+        "stream": false
+      },
+      {
+        "name": "cardecor:brake_pedal_3",
+        "volume": 0.68,
+        "stream": false
+      }
+    ]
+  },
+  "clutch_release": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:clutch_release",
+        "volume": 0.68,
+        "stream": false
+      }
+    ]
+  },
+  "pedal_press": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:pedal_press",
+        "volume": 0.68,
+        "stream": false
+      }
+    ]
+  },
+  "pedal_release": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:pedal_release",
+        "volume": 0.68,
+        "stream": false
+      }
+    ]
+  },
+  "car_rain_cabin": {
+    "category": "weather",
+    "sounds": [
+      {
+        "name": "cardecor:car_rain_cabin",
+        "volume": 0.85,
+        "stream": false
+      }
+    ]
+  },
+  "tire_roll_snow": {
+    "category": "neutral",
+    "sounds": [
+      {
+        "name": "cardecor:tire_roll_snow",
+        "volume": 0.85,
+        "stream": false
+      }
+    ]
+  },
+  "vehicle_item_put": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:vehicle_item_put_1",
+        "volume": 0.80,
+        "stream": false
+      },
+      {
+        "name": "cardecor:vehicle_item_put_2",
+        "volume": 0.80,
+        "stream": false
+      },
+      {
+        "name": "cardecor:vehicle_item_put_3",
+        "volume": 0.80,
+        "stream": false
+      }
+    ]
+  },
+  "car_heater": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_heater",
+        "volume": 0.15,
+        "stream": false
+      }
+    ]
+  },
+  "car_heater_start": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_heater_start",
+        "volume": 0.85,
+        "stream": false
+      }
+    ]
+  },
+  "car_heater_stop": {
+    "category": "players",
+    "sounds": [
+      {
+        "name": "cardecor:car_heater_stop",
+        "volume": 0.85,
+        "stream": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "cardecor",
+  "version": "1.0.0",
+  "name": "Project Vehicles",
+  "description": "High-fidelity drivable vehicles, tuning and survival mechanics.",
+  "authors": [
+    "evgen"
+  ],
+  "contact": {},
+  "license": "All Rights Reserved",
+  "icon": "assets/cardecor/textures/item/car_key.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.evgen.cardecor.fabric.CarDecorFabric"
+    ],
+    "client": [
+      "com.evgen.cardecor.fabric.client.CarDecorFabricClient"
+    ]
+  },
+  "mixins": [
+    "cardecor.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}

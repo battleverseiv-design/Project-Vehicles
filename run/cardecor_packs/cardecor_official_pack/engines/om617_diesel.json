@@ -1,0 +1,35 @@
+{
+  "id": "om617_diesel",
+  "name": "3.0L Inline-6 Twin Turbo",
+  "type": "i6",
+  "author": "Battleverse",
+  "physics": {
+    "horsepower": 100.0,
+    "torque_nm": 280.0,
+    "idle_rpm": 850.0,
+    "redline_rpm": 7200.0,
+    "max_rpm": 7800.0,
+    "rev_speed": 1.25,
+    "engine_braking": 1.2
+  },
+  "sounds": {
+    "starter": "cardecor:starter_i4",
+    "start": "cardecor:blue_sedan_start",
+    "stop": "cardecor:engine_stop_i6",
+    "master_volume": 1.0,
+    "pitch_multiplier": 1.0,
+    "layers": {
+      "idle": "cardecor:blue_sedan_idle",
+      "low": "cardecor:blue_sedan_low",
+      "mid": "cardecor:blue_sedan_mid",
+      "high": "cardecor:blue_sedan_high",
+      "max": "cardecor:blue_sedan_max"
+    },
+    "transitions": {
+      "idle_to_low": 1800.0,
+      "low_to_mid": 3300.0,
+      "mid_to_high": 4800.0,
+      "high_to_max": 6200.0
+    }
+  }
+}

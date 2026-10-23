@@ -1,0 +1,15 @@
+{
+  "id": "standard_road_wheel",
+  "name": "Заводское дорожное колесо (15\")",
+  "type": "wheel",
+  "author": "CarDecor",
+  "radius": 0.38,
+  "width": 0.22,
+  "grip_asphalt": 1.0,
+  "grip_dirt": 0.82,
+  "grip_ice": 0.25,
+  "mass_kg": 18.0,
+  "durability_hp": 150.0,
+  "model": "models/sedan_wheel.obj",
+  "texture": "textures/sedan_skin.png"
+}

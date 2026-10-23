@@ -1,0 +1,35 @@
+{
+  "id": "amc_4_0_i6",
+  "name": "AMC 4.0L High Output (I6)",
+  "type": "inline6",
+  "author": "Battleverse",
+  "physics": {
+    "horsepower": 190.0,
+    "torque_nm": 310.0,
+    "idle_rpm": 850.0,
+    "redline_rpm": 5500.0,
+    "max_rpm": 6200.0,
+    "rev_speed": 1.35,
+    "engine_braking": 1.1
+  },
+  "sounds": {
+    "starter": "cardecor:starter_i6",
+    "start": "cardecor:blue_sedan_start",
+    "stop": "cardecor:engine_stop_i6",
+    "master_volume": 1.15,
+    "pitch_multiplier": 1.0,
+    "layers": {
+      "idle": "cardecor:amc_i6_idle",
+      "low": "cardecor:amc_i6_low",
+      "mid": "cardecor:amc_i6_mid",
+      "high": "cardecor:amc_i6_high",
+      "max": "cardecor:amc_i6_max"
+    },
+    "transitions": {
+      "idle_to_low": 1600.0,
+      "low_to_mid": 2800.0,
+      "mid_to_high": 4200.0,
+      "high_to_max": 5400.0
+    }
+  }
+}

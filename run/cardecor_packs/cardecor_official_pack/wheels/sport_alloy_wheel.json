@@ -1,0 +1,15 @@
+{
+  "id": "sport_alloy_wheel",
+  "name": "Спортивное низкопрофильное колесо (17\")",
+  "type": "sport",
+  "author": "CarDecor",
+  "radius": 0.36,
+  "width": 0.24,
+  "grip_asphalt": 1.22,
+  "grip_dirt": 0.65,
+  "grip_ice": 0.15,
+  "mass_kg": 15.0,
+  "durability_hp": 130.0,
+  "model": "models/sedan_wheel.obj",
+  "texture": "textures/sedan_skin.png"
+}

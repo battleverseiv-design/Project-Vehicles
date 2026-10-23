@@ -1,0 +1,35 @@
+# Build directories & caches
+.gradle/
+build/
+bin/
+out/
+.idea/
+.vscode/
+
+# Run directory runtime files (exclude temp/world/logs, keep packs)
+run/saves/
+run/logs/
+run/crash-reports/
+run/defaultconfigs/
+run/resourcepacks/
+run/mods/
+run/config/
+run/options.txt
+run/usercache.json
+run/usernamecache.json
+
+# Binaries & Archives
+*.jar
+*.class
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Temp and backups
+*.log
+*.tmp
+*.bak
+scratch/
+scratch_*.txt
+backup_*/

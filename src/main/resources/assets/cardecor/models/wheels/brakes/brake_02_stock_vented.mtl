@@ -1,0 +1,4 @@
+newmtl brake_02_stock_vented_mat
+Ka 1.0 1.0 1.0
+Kd 1.0 1.0 1.0
+map_Kd wheel_palette.png

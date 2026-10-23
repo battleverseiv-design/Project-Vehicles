@@ -1,0 +1,9 @@
+{
+  "id": "leather_luxury_seat",
+  "name": "Кожаное комфортное кресло",
+  "type": "leather",
+  "author": "CarDecor",
+  "comfort_factor": 1.4,
+  "sitting_height_offset": 0.02,
+  "mass_kg": 16.0
+}

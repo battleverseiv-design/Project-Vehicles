@@ -1,0 +1,92 @@
+plugins {
+    id 'dev.architectury.loom' version '1.7-SNAPSHOT'
+}
+
+version = '1.0.0'
+group = 'com.evgen.cardecor'
+base {
+    archivesName = 'project-vehicles-fabric-1.20.1'
+}
+archivesBaseName = 'project-vehicles-fabric-1.20.1'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+repositories {
+    mavenCentral()
+    maven { url 'https://maven.fabricmc.net/' }
+    maven { url 'https://maven.architectury.dev/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:1.20.1"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:0.15.11"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:0.92.12+1.20.1"
+    implementation "org.ode4j:core:0.5.4"
+    include "org.ode4j:core:0.5.4"
+}
+
+loom {
+    mixin {
+        defaultRefmapName.set("cardecor.refmap.json")
+    }
+}
+
+tasks.register('syncCommonSources', Sync) {
+    from('../src/main/java') {
+        exclude 'com/evgen/cardecor/CarDecorMod.java'
+        exclude 'com/evgen/cardecor/client/ClientEvents.java'
+        exclude 'com/evgen/cardecor/client/ClientModEvents.java'
+        exclude 'com/evgen/cardecor/client/ModKeyBindings.java'
+        exclude 'com/evgen/cardecor/client/VehicleVFX.java'
+        exclude 'com/evgen/cardecor/compat/TaczCompat.java'
+        exclude 'com/evgen/cardecor/entity/VehiclePartEntity.java'
+        exclude 'com/evgen/cardecor/event/**'
+        exclude 'com/evgen/cardecor/init/**'
+        exclude 'com/evgen/cardecor/network/**'
+        exclude 'com/evgen/cardecor/pack/VehiclePackLoader.java'
+        exclude 'com/evgen/cardecor/physics/zerogc/**'
+        exclude 'com/example/**'
+    }
+    into layout.buildDirectory.dir("generated/sources/commonJava")
+}
+
+tasks.register('syncCommonResources', Sync) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from('../src/main/resources') {
+        exclude 'META-INF/mods.toml'
+    }
+    into layout.buildDirectory.dir("generated/resources/commonResources")
+}
+
+sourceSets.main {
+    java {
+        srcDir 'src/main/java'
+        srcDir syncCommonSources
+    }
+    resources {
+        srcDir 'src/main/resources'
+        srcDir syncCommonResources
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+            "Specification-Title"     : "cardecor",
+            "Specification-Vendor"    : "evgen",
+            "Specification-Version"   : "1",
+            "Implementation-Title"    : project.name,
+            "Implementation-Version"  : project.jar.archiveVersion,
+            "Implementation-Vendor"   : "evgen"
+        ])
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

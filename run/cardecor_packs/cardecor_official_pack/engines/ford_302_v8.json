@@ -1,0 +1,67 @@
+{
+  "id": "ford_302_v8",
+  "name": "Ford 302 Windsor 5.0L (V8)",
+  "type": "v8",
+  "author": "Battleverse",
+  "block": {
+    "cylinders": 8,
+    "configuration": "v",
+    "bank_angle_deg": 90.0,
+    "bore_mm": 101.6,
+    "stroke_mm": 76.2,
+    "compression_ratio": 8.4,
+    "crank_type": "crossplane"
+  },
+  "valvetrain": {
+    "type": "ohv_pushrod",
+    "valves_per_cylinder": 2,
+    "cam_profile": "truck_towing",
+    "valve_float_rpm": 4800.0
+  },
+  "fuel_system": {
+    "type": "carburetor_2bbl",
+    "fuel_octane": 92.0
+  },
+  "flywheel": {
+    "mass_kg": 18.5,
+    "radius_m": 0.16,
+    "friction_factor": 1.0
+  },
+  "limits": {
+    "limiter_type": "valve_float",
+    "idle_rpm": 650.0,
+    "redline_rpm": 4400.0,
+    "max_rpm": 4800.0
+  },
+  "physics": {
+    "horsepower": 160.0,
+    "torque_nm": 340.0,
+    "idle_rpm": 650.0,
+    "redline_rpm": 4400.0,
+    "max_rpm": 4800.0,
+    "rev_speed": 1.15,
+    "engine_braking": 1.35
+  },
+  "sounds": {
+    "starter": "cardecor:starter_v8",
+    "start": "cardecor:vintage_engine_start",
+    "stop": "cardecor:engine_stop_v8",
+    "kickdown": "cardecor:engine_kickdown",
+    "camshaft_lope": true,
+    "master_volume": 1.10,
+    "pitch_multiplier": 1.0,
+    "layers": {
+      "idle": "cardecor:pickup_engine_0",
+      "low": "cardecor:pickup_engine_1",
+      "mid": "cardecor:pickup_engine_2",
+      "high": "cardecor:pickup_engine_3",
+      "max": "cardecor:pickup_engine_4"
+    },
+    "transitions": {
+      "idle_to_low": 1100.0,
+      "low_to_mid": 2000.0,
+      "mid_to_high": 3000.0,
+      "high_to_max": 3900.0
+    }
+  }
+}

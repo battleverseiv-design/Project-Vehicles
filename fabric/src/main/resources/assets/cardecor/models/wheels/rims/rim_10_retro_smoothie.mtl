@@ -1,0 +1,4 @@
+newmtl rim_10_retro_smoothie_mat
+Ka 1.0 1.0 1.0
+Kd 1.0 1.0 1.0
+map_Kd wheel_palette.png

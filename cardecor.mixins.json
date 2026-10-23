@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.evgen.cardecor.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "cardecor.refmap.json",
+  "client": [
+    "LevelRendererMixin",
+    "RenderTargetShadowPassMixin",
+    "IrisChunkProgramOverridesMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

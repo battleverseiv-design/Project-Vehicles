@@ -1,0 +1,9 @@
+{
+  "id": "standard_seat",
+  "name": "Заводское сиденье",
+  "type": "seat",
+  "author": "CarDecor",
+  "comfort_factor": 1.0,
+  "sitting_height_offset": 0.0,
+  "mass_kg": 12.0
+}
