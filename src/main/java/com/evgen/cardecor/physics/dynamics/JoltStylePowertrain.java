@@ -362,8 +362,11 @@ public class JoltStylePowertrain {
         float freeRelAccel = (engineTorque * invIe) - (-reflectedRoadLoad * invJt);
         float targetLockTorque = reducedMass * (freeRelAccel + (deltaOmega / dt));
 
+        boolean canLock = Math.abs(targetLockTorque) <= mCap;
+        boolean zeroCrossing = (prevDeltaOmega != 0.0f && deltaOmega * prevDeltaOmega <= 0.0f);
+
         float clutchTorque;
-        if (Math.abs(targetLockTorque) <= mCap) {
+        if (canLock || zeroCrossing || (this.isClutchLocked && Math.abs(targetLockTorque) <= mCap * 1.35f)) {
             // Сцепление жестко заблокировано: валы крутятся как единое целое
             this.isClutchLocked = true;
             clutchTorque = targetLockTorque;

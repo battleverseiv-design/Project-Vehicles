@@ -85,12 +85,12 @@ public final class BrushTireSolver {
     public static float getEffectiveWheelInertia(
             float baseWheelInertia,
             boolean isDriven,
-            boolean isClutchLocked,
+            boolean clutchPedalPressed,
             float engineInertia,
             float totalRatio,
             int drivenCount
     ) {
-        if (!isDriven || !isClutchLocked || drivenCount <= 0 || Math.abs(totalRatio) < 0.01f) {
+        if (!isDriven || clutchPedalPressed || drivenCount <= 0 || Math.abs(totalRatio) < 0.01f) {
             return baseWheelInertia;
         }
         float reflectedEngineInertia = (engineInertia * (totalRatio * totalRatio)) / (float) drivenCount;
@@ -273,8 +273,8 @@ public final class BrushTireSolver {
             wheel.angularVelocity = omegaDamped - Math.copySign(maxBrakeDeltaOmega, omegaDamped);
         }
 
-        // Г. Кинематический ограничитель: колесо не может обгонять двигатель при заблокированном сцеплении
-        if (wheel.isClutchLocked && Float.isFinite(wheel.maxAllowedOmega) && wheel.maxAllowedOmega != Float.MAX_VALUE) {
+        // Г. Кинематический ограничитель: колесо не может обгонять вал двигателя при нажатом газе
+        if (Float.isFinite(wheel.maxAllowedOmega) && wheel.maxAllowedOmega != Float.MAX_VALUE) {
             if (wheel.maxAllowedOmega >= 0.0f) {
                 if (wheel.angularVelocity > wheel.maxAllowedOmega) {
                     wheel.angularVelocity = wheel.maxAllowedOmega;

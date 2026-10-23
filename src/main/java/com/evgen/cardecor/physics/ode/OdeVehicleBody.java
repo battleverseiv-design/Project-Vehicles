@@ -747,7 +747,7 @@ public class OdeVehicleBody {
             float effectiveInertia = BrushTireSolver.getEffectiveWheelInertia(
                     wheelBaseInertia,
                     isDriven,
-                    powertrain.isClutchLocked,
+                    powertrain.clutchPedalPressed,
                     powertrainSpec.engineInertia,
                     totalRatio,
                     drivenCount
@@ -755,7 +755,7 @@ public class OdeVehicleBody {
             wheelStates[i].wheelInertia = effectiveInertia;
             wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, effectiveInertia);
 
-            if (isDriven && powertrain.isClutchLocked && Math.abs(totalRatio) > 0.01f) {
+            if (isDriven && !powertrain.clutchPedalPressed && Math.abs(totalRatio) > 0.01f) {
                 float engineOmega = powertrain.currentRpm * JoltStylePowertrain.RPM_TO_RAD_PER_SEC;
                 wheelStates[i].isClutchLocked = true;
                 wheelStates[i].maxAllowedOmega = engineOmega / totalRatio;
