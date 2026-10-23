@@ -317,31 +317,34 @@ public class JoltStylePowertrain {
         float deltaOmega = engineOmega - transmissionOmega;
 
         float clutchTorque = 0.0f;
-        float lockThresholdOmega = 1.8f; // ~17 RPM относительной скорости
         boolean pedalEngaged = (clutchPedal < 0.20f);
         boolean inGear = (currentGear != 0);
 
-        if (inGear && pedalEngaged && (this.isClutchLocked || Math.abs(deltaOmega) < lockThresholdOmega)) {
+        // Если выжато сцепление, идет переключение или включена нейтраль — сцепление всегда разомкнуто
+        if (!pedalEngaged || !inGear || shiftCooldown > 0.0f) {
+            this.isClutchLocked = false;
+        }
+
+        // Порог надежного схватывания: разница скоростей < 25 рад/с (~240 RPM)
+        if (inGear && pedalEngaged && shiftCooldown <= 0.0f && (this.isClutchLocked || Math.abs(deltaOmega) < 25.0f)) {
             // ---------------- РЕЖИМ: LOCKED (Жесткая механическая связь) ----------------
             float iEngine = Math.max(0.01f, spec.engineInertia);
             float iTotal = iEngine + it;
 
-            float roadLoadTorque = (avgWheelAngularVel * 2.5f) / Math.max(1.0f, Math.abs(totalRatio));
-            float netSystemTorque = engineTorque - roadLoadTorque;
-            float coupledAlpha = netSystemTorque / iTotal;
-
-            float internalHoldTorque = (it * engineTorque + iEngine * roadLoadTorque) / iTotal;
-            float staticBreakawayCap = mCap * 1.25f;
+            // Чистый удерживающий момент от двигателя без двойного сопротивления дороги (его считает ODE4J)
+            float internalHoldTorque = (it / iTotal) * engineTorque;
+            float staticBreakawayCap = mCap * 1.35f;
 
             if (Math.abs(internalHoldTorque) <= staticBreakawayCap) {
                 this.isClutchLocked = true;
                 clutchTorque = internalHoldTorque;
 
-                // Обновляем ТОЛЬКО обороты двигателя; колеса интегрирует ODE4J через currentWheelTorqueNm
-                engineOmega += coupledAlpha * dt;
-                deltaOmega = 0.0f;
+                // Двигатель жестко следует за трансмиссией
+                float targetEngineOmega = Math.max(spec.minRpm * RPM_TO_RAD_PER_SEC, transmissionOmega);
+                engineOmega = Mth.lerp(0.35f, engineOmega, targetEngineOmega);
+                deltaOmega = 0.0f; // сцепление зажато — нулевой нагрев!
             } else {
-                this.isClutchLocked = false; // Срыв в пробуксовку
+                this.isClutchLocked = false; // срыв в букс при перегрузке
             }
         }
 
@@ -367,14 +370,13 @@ public class JoltStylePowertrain {
         }
 
         // Телеметрия и диагностическое логирование
-        if (currentGear == 1 && driveThrottle > 0.5f) {
+        if (currentGear != 0 && driveThrottle > 0.05f) {
             if (--this.telemetryLogCooldown <= 0) {
                 this.telemetryLogCooldown = 20; // 4 раза в секунду при 80 Гц
                 System.out.printf(java.util.Locale.ROOT,
-                    "[Powertrain] Gear=%d, RPM=%.0f, EngW=%.1f, TransW=%.1f, ClTorque=%.1f, mCap=%.1f, State=%s, WheelW=%.1f, Spd=%.1f km/h%n",
-                    currentGear, currentRpm, engineOmega, transmissionOmega,
-                    clutchTorque, mCap, (this.isClutchLocked ? "LOCKED" : "SLIP"),
-                    avgWheelAngularVel, (forwardSpeedMps * 3.6f));
+                    "[ДИАГНОСТИКА] Gear=%d | RPM=%.0f | Speed=%.1f km/h | TotalRatio=%.2f | mCap=%.1f | ClTorque=%.1f | WheelTorque=%.1f | State=%s%n",
+                    currentGear, currentRpm, (forwardSpeedMps * 3.6f), totalRatio, mCap,
+                    clutchTorque, (clutchTorque * gearRatio * spec.transmissionEfficiency), (this.isClutchLocked ? "LOCKED" : "SLIP"));
             }
         }
 
