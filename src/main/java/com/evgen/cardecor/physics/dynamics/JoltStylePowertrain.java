@@ -38,6 +38,8 @@ public class JoltStylePowertrain {
 
     // Термодинамика сцепления
     public float clutchTempCelsius = 30.0f;
+    public boolean isClutchLocked = false;       // LCP состояние: сцепление жестко замкнуто
+    private int telemetryLogCooldown = 0;
     public static final float CLUTCH_THERMAL_MASS = 250.0f; // J/K (стальной диск ~0.5 кг * 500)
     public static final float CLUTCH_COOLING_H_A = 4.5f;    // Вт/К (конвективное охлаждение)
     public static final float CLUTCH_AMBIENT = 30.0f;
@@ -267,10 +269,13 @@ public class JoltStylePowertrain {
         float springNorm = Math.max(0.0f, 1.0f - 3.0f * u * u + 2.0f * u * u * u);
         float fn = spec.clutchMaxClampingForce * springNorm;
 
-        // Эффективный предельный момент сцепления: при 0% ресурса сцепление полностью отключается (0.0f)
-        float conditionFactor = Mth.clamp(this.transmissionCondition / 75.0f, 0.0f, 1.0f);
+        // Эффективный предельный момент сцепления: минимум 35% момента даже у изношенной коробки
+        float conditionFactor = Math.max(0.35f, Math.min(1.0f, this.transmissionCondition / 75.0f));
         float mCap = spec.clutchPlatesCount * spec.clutchFrictionCoeff * fn * spec.clutchEffectiveRadius
                 * conditionFactor * this.clutchFrictionMultiplier;
+        if (!Float.isFinite(mCap) || mCap < 0.0f) {
+            mCap = 0.0f;
+        }
 
         // 5. Engine Torque Curve
         float normalizedRpm = currentRpm / Math.max(1.0f, spec.maxRpm);
@@ -294,37 +299,88 @@ public class JoltStylePowertrain {
             engineTorque = -spec.engineBrakingCoeff * 1.6f;
         }
 
-        // 6. Projected Gauss-Seidel LCP Solver for Clutch (Sticky vs Slipping Contact)
+        // 6. Двухрежимный LCP-решатель сцепления (LOCKED vs SLIP) без двойного интегрирования колёс ODE4J
+        float totalRatio = gearRatio; // gearRatio уже включает передачу и главную пару (differentialRatio)
+        float totalRatioSq = Math.max(1.0f, totalRatio * totalRatio);
+
+        // Динамический расчет инерции колес и эквивалентной массы кузова
+        float singleWheelInertia = 0.5f * 22.0f * (spec.wheelRadius * spec.wheelRadius);
+        float drivenWheelsRotationalInertia = 2.0f * singleWheelInertia;
+        float effectiveVehicleLinearInertia = (spec.baseMassKg * 0.45f) * (spec.wheelRadius * spec.wheelRadius);
+
+        // Приведенная к валу сцепления инерция трансмиссии
+        float it = (drivenWheelsRotationalInertia + effectiveVehicleLinearInertia) / totalRatioSq;
+        it = Math.max(0.04f, it);
+
         float engineOmega = currentRpm * RPM_TO_RAD_PER_SEC;
-        float transmissionOmega = avgWheelAngularVel * gearRatio;
+        float transmissionOmega = avgWheelAngularVel * totalRatio;
+        float deltaOmega = engineOmega - transmissionOmega;
 
-        float effectiveWheelInertia = 2.8f;
-        float it = Math.max(0.02f, effectiveWheelInertia / Math.max(1.0f, gearRatio * gearRatio));
+        float clutchTorque = 0.0f;
+        float lockThresholdOmega = 1.8f; // ~17 RPM относительной скорости
+        boolean pedalEngaged = (clutchPedal < 0.20f);
+        boolean inGear = (currentGear != 0);
 
-        // Free velocities without clutch constraint
-        float omegaEFree = engineOmega + (engineTorque / Math.max(0.01f, spec.engineInertia)) * dt;
-        float omegaTFree = transmissionOmega;
+        if (inGear && pedalEngaged && (this.isClutchLocked || Math.abs(deltaOmega) < lockThresholdOmega)) {
+            // ---------------- РЕЖИМ: LOCKED (Жесткая механическая связь) ----------------
+            float iEngine = Math.max(0.01f, spec.engineInertia);
+            float iTotal = iEngine + it;
 
-        // Delassus operator (inverse effective mass of the 2-body system)
-        float invMeff = (1.0f / Math.max(0.01f, spec.engineInertia)) + (1.0f / it);
-        float mEff = 1.0f / invMeff;
+            float roadLoadTorque = (avgWheelAngularVel * 2.5f) / Math.max(1.0f, Math.abs(totalRatio));
+            float netSystemTorque = engineTorque - roadLoadTorque;
+            float coupledAlpha = netSystemTorque / iTotal;
 
-        float deltaOmegaFree = omegaEFree - omegaTFree;
-        float targetTorque = (mEff * deltaOmegaFree) / dt;
-        if (!Float.isFinite(targetTorque)) {
-            targetTorque = 0.0f;
+            float internalHoldTorque = (it * engineTorque + iEngine * roadLoadTorque) / iTotal;
+            float staticBreakawayCap = mCap * 1.25f;
+
+            if (Math.abs(internalHoldTorque) <= staticBreakawayCap) {
+                this.isClutchLocked = true;
+                clutchTorque = internalHoldTorque;
+
+                // Обновляем ТОЛЬКО обороты двигателя; колеса интегрирует ODE4J через currentWheelTorqueNm
+                engineOmega += coupledAlpha * dt;
+                deltaOmega = 0.0f;
+            } else {
+                this.isClutchLocked = false; // Срыв в пробуксовку
+            }
         }
 
-        // Coulomb friction projection onto [-M_cap, +M_cap]
-        float clutchTorque = Mth.clamp(targetTorque, -mCap, mCap);
+        if (!this.isClutchLocked) {
+            // ---------------- РЕЖИМ: SLIP (Проскальзывание сцепления) ----------------
+            float iEngine = Math.max(0.01f, spec.engineInertia);
+            float omegaEFree = engineOmega + (engineTorque / iEngine) * dt;
+            float omegaTFree = transmissionOmega;
 
-        // Update angular velocities via constrained impulse
-        engineOmega = omegaEFree - (clutchTorque / Math.max(0.01f, spec.engineInertia)) * dt;
-        transmissionOmega = omegaTFree + (clutchTorque / it) * dt;
+            float invMeff = (1.0f / iEngine) + (1.0f / it);
+            float mEff = 1.0f / invMeff;
+
+            float deltaOmegaFree = omegaEFree - omegaTFree;
+            float targetTorque = (mEff * deltaOmegaFree) / dt;
+            if (!Float.isFinite(targetTorque)) {
+                targetTorque = 0.0f;
+            }
+
+            clutchTorque = Mth.clamp(targetTorque, -mCap, mCap);
+
+            // Обновляем только маховик двигателя
+            engineOmega = omegaEFree - (clutchTorque / iEngine) * dt;
+        }
+
+        // Телеметрия и диагностическое логирование
+        if (currentGear == 1 && driveThrottle > 0.5f) {
+            if (--this.telemetryLogCooldown <= 0) {
+                this.telemetryLogCooldown = 20; // 4 раза в секунду при 80 Гц
+                System.out.printf(java.util.Locale.ROOT,
+                    "[Powertrain] Gear=%d, RPM=%.0f, EngW=%.1f, TransW=%.1f, ClTorque=%.1f, mCap=%.1f, State=%s, WheelW=%.1f, Spd=%.1f km/h%n",
+                    currentGear, currentRpm, engineOmega, transmissionOmega,
+                    clutchTorque, mCap, (this.isClutchLocked ? "LOCKED" : "SLIP"),
+                    avgWheelAngularVel, (forwardSpeedMps * 3.6f));
+            }
+        }
 
         // 7. Физика старта с высокой передачи, тепловой баланс и детерминированный Engine Stall
         boolean isStopped = Math.abs(forwardSpeedMps) < 0.5f && Math.abs(avgWheelAngularVel) < 1.0f;
-        float deltaOmega = Math.abs(engineOmega - transmissionOmega);
+        deltaOmega = this.isClutchLocked ? 0.0f : Math.abs(engineOmega - transmissionOmega);
         updateClutchThermal(clutchTorque, deltaOmega, dt);
 
         float stallOmegaThreshold = spec.engineStallRpm * RPM_TO_RAD_PER_SEC;
