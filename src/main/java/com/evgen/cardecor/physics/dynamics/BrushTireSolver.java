@@ -76,6 +76,28 @@ public final class BrushTireSolver {
     }
 
     /**
+     * Вычисляет эффективную инерцию колеса для полунеявного интегратора.
+     * Защищает от бесконечного буксования и рывков в отсечку.
+     * Если сцепление в режиме SLIP, колесо имеет только свою массу.
+     * Как только сцепление заблокировалось (isClutchLocked == true),
+     * колесо надевает на себя приведенную инерцию двигателя.
+     */
+    public static float getEffectiveWheelInertia(
+            float baseWheelInertia,
+            boolean isDriven,
+            boolean isClutchLocked,
+            float engineInertia,
+            float totalRatio,
+            int drivenCount
+    ) {
+        if (!isDriven || !isClutchLocked || drivenCount <= 0 || Math.abs(totalRatio) < 0.01f) {
+            return baseWheelInertia;
+        }
+        float reflectedEngineInertia = (engineInertia * (totalRatio * totalRatio)) / (float) drivenCount;
+        return baseWheelInertia + reflectedEngineInertia;
+    }
+
+    /**
      * Вычисляет силы в пятне контакта и интегрирует угловую скорость колеса за подшаг dt = 0.0125 с.
      *
      * @param wheel            состояние колеса (хранит omega и принимает выходные силы F_x, F_y)

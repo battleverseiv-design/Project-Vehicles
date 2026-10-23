@@ -123,6 +123,7 @@ public class OdeVehicleBody {
     };
     public final boolean[] wheelSurfaceWet = new boolean[4];
     public final double[] wheelHitDist = new double[4];
+    public float lastRoadReactionTorque = 0.0f;
     private final float[][] wheelMountWorld = new float[4][3];
     private final Vector3f[] wheelFwdVec = new Vector3f[]{ new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f() };
     private final Vector3f[] wheelRightVec = new Vector3f[]{ new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f() };
@@ -706,6 +707,10 @@ public class OdeVehicleBody {
         this.avgDrivenWheelAngularVel = drivenCount > 0 ? (sumDrivenOmega / drivenCount) : 0.0f;
         this.maxDrivenWheelSlip = maxSlip;
 
+        float wheelMass = 22.0f;
+        float wheelBaseInertia = 0.5f * wheelMass * (wheelRadius * wheelRadius);
+        float totalDrivenWheelInertia = drivenCount * wheelBaseInertia + (this.mass * 0.45f) * (wheelRadius * wheelRadius);
+
         // 3. Jolt Physics Powertrain Update (Engine RPM, Clutch, Multi-gear Transmission)
         float forwardSpeedMps = tempLinVel.dot(tempLocalFwd);
         float totalWheelTorqueNm = powertrain.updatePowertrain(
@@ -714,7 +719,9 @@ public class OdeVehicleBody {
                 forwardSpeedMps,
                 avgDrivenWheelAngularVel,
                 groundedWheelsCount > 0,
-                maxDrivenWheelSlip
+                maxDrivenWheelSlip,
+                this.lastRoadReactionTorque,
+                totalDrivenWheelInertia
         );
 
         float driveTorquePerWheel = drivenCount > 0 ? (totalWheelTorqueNm / drivenCount) : 0.0f;
@@ -733,17 +740,18 @@ public class OdeVehicleBody {
         }
         float totalRatio = gearRatio;
 
-        float wheelMass = 22.0f;
-        float wheelBaseInertia = 0.5f * wheelMass * (wheelRadius * wheelRadius);
-
         for (int i = 0; i < 4; i++) {
             boolean isFront = (i < 2);
             boolean isDriven = drivetrain.equals("fwd") ? isFront : (drivetrain.equals("awd") || drivetrain.equals("4wd") ? true : !isFront);
 
-            float effectiveInertia = wheelBaseInertia;
-            if (isDriven && powertrain.currentGear != 0 && drivenCount > 0) {
-                effectiveInertia += (powertrainSpec.engineInertia * (totalRatio * totalRatio)) / drivenCount;
-            }
+            float effectiveInertia = BrushTireSolver.getEffectiveWheelInertia(
+                    wheelBaseInertia,
+                    isDriven,
+                    powertrain.isClutchLocked,
+                    powertrainSpec.engineInertia,
+                    totalRatio,
+                    drivenCount
+            );
             wheelStates[i].wheelInertia = effectiveInertia;
             wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, effectiveInertia);
 
@@ -1063,6 +1071,17 @@ public class OdeVehicleBody {
                     tempAdjustedArm.x * fwY - tempAdjustedArm.y * fwX
             );
         }
+
+        // 7. Accumulate driven wheel road reaction torque for powertrain LCP on next tick:
+        float sumRoadTorque = 0.0f;
+        for (int i = 0; i < 4; i++) {
+            boolean isFront = (i < 2);
+            boolean isDriven = drivetrain.equals("fwd") ? isFront : (drivetrain.equals("awd") || drivetrain.equals("4wd") ? true : !isFront);
+            if (isDriven && wheelGrounded[i]) {
+                sumRoadTorque += wheelStates[i].outForceLongitudinal * this.wheelRadius;
+            }
+        }
+        this.lastRoadReactionTorque = sumRoadTorque;
 
         // Store front lateral force for caster self-aligning torque on next sub-tick
         this.prevFrontLateralForce = frontLateralForceSum;

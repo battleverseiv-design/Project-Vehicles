@@ -16,6 +16,17 @@ public class PowertrainState extends JoltStylePowertrain {
         super(spec);
     }
 
+    public float updatePowertrain(
+            float dt,
+            float throttleInput,
+            float forwardSpeedMps,
+            float avgWheelAngularVel,
+            boolean isGrounded,
+            float maxWheelSlip
+    ) {
+        return updatePowertrain(dt, throttleInput, forwardSpeedMps, avgWheelAngularVel, isGrounded, maxWheelSlip, 0.0f, 0.0f);
+    }
+
     /**
      * Extended powertrain update method matching specification interface.
      */
@@ -25,9 +36,11 @@ public class PowertrainState extends JoltStylePowertrain {
             float forwardSpeedMps,
             float avgWheelAngularVel,
             boolean isGrounded,
-            float maxWheelSlip
+            float maxWheelSlip,
+            float roadReactionTorque,
+            float totalWheelInertia
     ) {
-        float torque = stepEngineAndTransmission(dt, throttleInput, forwardSpeedMps, avgWheelAngularVel, isGrounded, maxWheelSlip);
+        float torque = stepEngineAndTransmission(dt, throttleInput, forwardSpeedMps, avgWheelAngularVel, isGrounded, maxWheelSlip, roadReactionTorque, totalWheelInertia);
         this.currentSpeedKmh = Math.abs(forwardSpeedMps) * 3.6f;
         return torque;
     }
