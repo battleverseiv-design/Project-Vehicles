@@ -388,7 +388,12 @@ public class JoltStylePowertrain {
         } else {
             // Сцепление пробуксовывает (SLIP): передаем максимальный момент mCap по знаку дельты скоростей
             this.isClutchLocked = false;
-            clutchTorque = Math.copySign(mCap, deltaOmega);
+            float slipCap = mCap;
+            if (driveThrottle > 0.05f && Math.abs(avgWheelAngularVel) < 4.0f && this.currentRpm < 2600.0f) {
+                float sustainableTorque = Math.max(35.0f, engineTorque * 0.88f);
+                slipCap = Math.min(mCap, sustainableTorque);
+            }
+            clutchTorque = Math.copySign(slipCap, deltaOmega);
             // ГЛАВНОЕ УРАВНЕНИЕ УСКОРЕНИЯ КОЛЕНВАЛА: Из момента ДВС вычитается момент сцепления!
             float netEngineTorque = engineTorque - clutchTorque;
             engineOmega += (netEngineTorque * invIe) * dt;
