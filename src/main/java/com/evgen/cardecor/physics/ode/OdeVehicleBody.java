@@ -2,6 +2,7 @@ package com.evgen.cardecor.physics.ode;
 
 import com.evgen.cardecor.pack.VehicleDefinition;
 import com.evgen.cardecor.physics.dynamics.BrushTireSolver;
+import com.evgen.cardecor.physics.dynamics.JoltStylePowertrain;
 import com.evgen.cardecor.physics.dynamics.BulletWheelFriction;
 import com.evgen.cardecor.physics.dynamics.MarcoMonsterAero;
 import com.evgen.cardecor.physics.dynamics.PowertrainSpec;
@@ -253,8 +254,9 @@ public class OdeVehicleBody {
         currentRotation.identity();
         prevRotation.identity();
 
+        float initialWheelInertia = 0.5f * 22.0f * (this.wheelRadius * this.wheelRadius);
         for (int i = 0; i < 4; i++) {
-            this.wheelStates[i].init(this.wheelRadius, 1.4f);
+            this.wheelStates[i].init(this.wheelRadius, initialWheelInertia);
         }
     }
 
@@ -494,8 +496,9 @@ public class OdeVehicleBody {
             if (def.wheels.radius > 0.1f) {
                 this.wheelRadius = (float) def.wheels.radius;
                 this.powertrainSpec.wheelRadius = this.wheelRadius;
+                float confWheelInertia = 0.5f * 22.0f * (this.wheelRadius * this.wheelRadius);
                 for (int i = 0; i < 4; i++) {
-                    this.wheelStates[i].init(this.wheelRadius, 1.4f);
+                    this.wheelStates[i].init(this.wheelRadius, confWheelInertia);
                 }
             }
         }
@@ -720,6 +723,39 @@ public class OdeVehicleBody {
             this.impactCutoffActive = false;
         }
         this.baseDriveForce = driveTorquePerWheel / Math.max(0.1f, wheelRadius);
+
+        // Динамический расчет отраженной инерции двигателя и кинематического лимита для каждого колеса
+        float gearRatio = 0.0f;
+        if (powertrain.currentGear == -1) {
+            gearRatio = powertrainSpec.reverseGearRatio * powertrainSpec.differentialRatio;
+        } else if (powertrain.currentGear > 0 && powertrain.currentGear <= powertrainSpec.gearRatios.length) {
+            gearRatio = powertrainSpec.gearRatios[powertrain.currentGear - 1] * powertrainSpec.differentialRatio;
+        }
+        float totalRatio = gearRatio;
+
+        float wheelMass = 22.0f;
+        float wheelBaseInertia = 0.5f * wheelMass * (wheelRadius * wheelRadius);
+
+        for (int i = 0; i < 4; i++) {
+            boolean isFront = (i < 2);
+            boolean isDriven = drivetrain.equals("fwd") ? isFront : (drivetrain.equals("awd") || drivetrain.equals("4wd") ? true : !isFront);
+
+            float effectiveInertia = wheelBaseInertia;
+            if (isDriven && powertrain.currentGear != 0 && drivenCount > 0) {
+                effectiveInertia += (powertrainSpec.engineInertia * (totalRatio * totalRatio)) / drivenCount;
+            }
+            wheelStates[i].wheelInertia = effectiveInertia;
+            wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, effectiveInertia);
+
+            if (isDriven && powertrain.isClutchLocked && Math.abs(totalRatio) > 0.01f) {
+                float engineOmega = powertrain.currentRpm * JoltStylePowertrain.RPM_TO_RAD_PER_SEC;
+                wheelStates[i].isClutchLocked = true;
+                wheelStates[i].maxAllowedOmega = engineOmega / totalRatio;
+            } else {
+                wheelStates[i].isClutchLocked = false;
+                wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
+            }
+        }
 
         groundedWheelsCount = 0;
         float steerAngleRad = updateSteeringAngleRad(this.steerInput, dt);

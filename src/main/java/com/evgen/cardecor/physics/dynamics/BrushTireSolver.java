@@ -37,6 +37,10 @@ public final class BrushTireSolver {
         public float angularVelocity = 0.0f;   // omega (рад/с)
         public float spinAngleRad = 0.0f;      // угол для рендера (рад)
         public float camberRad = 0.0f;         // динамический угол развала (рад)
+        // Кинематический ограничитель скорости колеса от вала двигателя при блокировке сцепления
+        public boolean isClutchLocked = false;
+        public float maxAllowedOmega = Float.MAX_VALUE;
+
 
         // Выходные силы в локальных осях пятна контакта (для приложения к DBody в ODE4J)
         public float outForceLongitudinal = 0.0f; // F_x (Н, вдоль направления качения колеса)
@@ -56,6 +60,8 @@ public final class BrushTireSolver {
             this.wheelRadius = Math.max(0.05f, wheelRadius);
             this.wheelInertia = Math.max(0.05f, wheelInertia);
             this.invWheelInertia = 1.0f / this.wheelInertia;
+            this.isClutchLocked = false;
+            this.maxAllowedOmega = Float.MAX_VALUE;
         }
 
         public void reset() {
@@ -64,6 +70,8 @@ public final class BrushTireSolver {
             this.outForceLongitudinal = 0.0f;
             this.outForceLateral = 0.0f;
             this.outCombinedSlipNorm = 0.0f;
+            this.isClutchLocked = false;
+            this.maxAllowedOmega = Float.MAX_VALUE;
         }
     }
 
@@ -241,6 +249,19 @@ public final class BrushTireSolver {
             wheel.angularVelocity = 0.0f;
         } else {
             wheel.angularVelocity = omegaDamped - Math.copySign(maxBrakeDeltaOmega, omegaDamped);
+        }
+
+        // Г. Кинематический ограничитель: колесо не может обгонять двигатель при заблокированном сцеплении
+        if (wheel.isClutchLocked && Float.isFinite(wheel.maxAllowedOmega) && wheel.maxAllowedOmega != Float.MAX_VALUE) {
+            if (wheel.maxAllowedOmega >= 0.0f) {
+                if (wheel.angularVelocity > wheel.maxAllowedOmega) {
+                    wheel.angularVelocity = wheel.maxAllowedOmega;
+                }
+            } else {
+                if (wheel.angularVelocity < wheel.maxAllowedOmega) {
+                    wheel.angularVelocity = wheel.maxAllowedOmega;
+                }
+            }
         }
 
         // Обновляем угол вращения для рендера 3D-модели колеса
