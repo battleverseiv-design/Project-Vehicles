@@ -150,8 +150,9 @@ public class JoltStylePowertrain {
      */
     private float computeAutoClutchEngagement(float throttle, float avgWheelOmega, float totalRatio) {
         if (currentGear == 0) return 0.0f;
-        if (Math.abs(avgWheelOmega) < 1.0f) {
-            return Mth.clamp(throttle * 2.5f, 0.15f, 1.0f);
+        if (Math.abs(avgWheelOmega) < 3.0f) {
+            float rpmProgress = Mth.clamp((this.currentRpm - spec.minRpm) / 1200.0f, 0.0f, 1.0f);
+            return Mth.lerp(rpmProgress, 0.08f, 1.0f);
         }
         return 1.0f;
     }
@@ -281,9 +282,9 @@ public class JoltStylePowertrain {
 
         // Интегрирование хода педали сцепления
         if (clutchPedalPressed) {
-            clutchPedalPosition = Math.min(1.0f, clutchPedalPosition + dt * 14.0f);
+            clutchPedalPosition = Math.min(1.0f, clutchPedalPosition + dt * 18.0f);
         } else {
-            clutchPedalPosition = Math.max(0.0f, clutchPedalPosition - dt * 6.5f);
+            clutchPedalPosition = Math.max(0.0f, clutchPedalPosition - dt * 10.0f);
         }
 
         // 4. Diaphragm Belleville Spring Clamping Capacity (Bite Point curve)

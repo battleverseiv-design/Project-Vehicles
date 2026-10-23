@@ -757,8 +757,8 @@ public class OdeVehicleBody {
 
             if (powertrain.isEngineOn && isDriven && !powertrain.clutchPedalPressed && Math.abs(totalRatio) > 0.01f) {
                 float engineOmega = powertrain.currentRpm * JoltStylePowertrain.RPM_TO_RAD_PER_SEC;
-                wheelStates[i].isClutchLocked = true;
-                wheelStates[i].maxAllowedOmega = engineOmega / totalRatio;
+                wheelStates[i].isClutchLocked = powertrain.isClutchLocked;
+                wheelStates[i].maxAllowedOmega = powertrain.isClutchLocked ? (engineOmega / totalRatio) : Float.MAX_VALUE;
             } else {
                 wheelStates[i].isClutchLocked = false;
                 wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;

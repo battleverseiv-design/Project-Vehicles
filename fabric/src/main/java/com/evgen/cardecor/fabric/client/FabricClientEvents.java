@@ -27,6 +27,8 @@ public class FabricClientEvents {
     private static int lastDirectGearKey = -99;
     private static int shiftUpLatchTicks = 0;
     private static int shiftDownLatchTicks = 0;
+    private static boolean lastShiftUpKeyDown = false;
+    private static boolean lastShiftDownKeyDown = false;
     private static final int SHIFT_LATCH_TICKS = 4;
 
     public static void init() {
@@ -332,7 +334,9 @@ public class FabricClientEvents {
                         flags |= 32;
                     }
                     long winKeys = mc.getWindow().getWindow();
-                    boolean clutchDown = ModKeyBindings.KEY_CLUTCH.isDown() || InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_LEFT_ALT);
+                    boolean clutchDown = ModKeyBindings.KEY_CLUTCH.isDown()
+                            || InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_LEFT_ALT)
+                            || InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_RIGHT_ALT);
                     if (clutchDown) {
                         flags |= 256;
                     }
@@ -364,40 +368,46 @@ public class FabricClientEvents {
                         lastDirectGearKey = -99;
                     }
 
+                    boolean shiftUpClicked = false;
                     while (ModKeyBindings.KEY_SHIFT_UP.consumeClick()) {
+                        shiftUpClicked = true;
+                    }
+                    boolean shiftDownClicked = false;
+                    while (ModKeyBindings.KEY_SHIFT_DOWN.consumeClick()) {
+                        shiftDownClicked = true;
+                    }
+
+                    // Прямой опрос клавиш через GLFW для 100% надежного переключения при любом зажатом Alt
+                    boolean rawUp = InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_R);
+                    if (rawUp && !lastShiftUpKeyDown) {
+                        shiftUpClicked = true;
+                    }
+                    lastShiftUpKeyDown = rawUp;
+
+                    boolean rawDown = InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_F);
+                    if (rawDown && !lastShiftDownKeyDown) {
+                        shiftDownClicked = true;
+                    }
+                    lastShiftDownKeyDown = rawDown;
+
+                    if (shiftUpClicked) {
                         shiftUpLatchTicks = SHIFT_LATCH_TICKS;
                     }
-                    while (ModKeyBindings.KEY_SHIFT_DOWN.consumeClick()) {
+                    if (shiftDownClicked) {
                         shiftDownLatchTicks = SHIFT_LATCH_TICKS;
                     }
 
-                    // Защёлка для надёжной передачи через сеть
+                    // Передача переключается четко и надежно (хоть с зажатым Alt, хоть без него!)
                     if (shiftUpLatchTicks > 0) {
-                        if (clutchDown) {
-                            if (!directTriggeredThisTick) {
-                                flags |= 512;
-                            }
-                        } else {
-                            flags |= 2048; // Clutchless shift attempt!
-                            if (shiftUpLatchTicks == SHIFT_LATCH_TICKS) {
-                                mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                                    com.evgen.cardecor.init.ModSounds.CAR_IMPACT_LIGHT.get(), 0.65F, 0.75F));
-                            }
+                        if (!directTriggeredThisTick) {
+                            flags |= 512;
                         }
                         shiftUpLatchTicks--;
                     }
 
                     if (shiftDownLatchTicks > 0) {
-                        if (clutchDown) {
-                            if (!directTriggeredThisTick) {
-                                flags |= 1024;
-                            }
-                        } else {
-                            flags |= 2048; // Clutchless shift attempt!
-                            if (shiftDownLatchTicks == SHIFT_LATCH_TICKS) {
-                                mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                                    com.evgen.cardecor.init.ModSounds.CAR_IMPACT_LIGHT.get(), 0.65F, 0.75F));
-                            }
+                        if (!directTriggeredThisTick) {
+                            flags |= 1024;
                         }
                         shiftDownLatchTicks--;
                     }

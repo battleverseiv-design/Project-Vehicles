@@ -260,19 +260,14 @@ public class ClientEvents {
                     shiftDownClicked = true;
                 }
 
-                // Прямой опрос клавиш через GLFW для обхода блокировки модификатора KeyModifier.ALT в Forge
-                int upCode = (ModKeyBindings.KEY_SHIFT_UP.getKey().getType() == InputConstants.Type.KEYSYM)
-                        ? ModKeyBindings.KEY_SHIFT_UP.getKey().getValue() : GLFW.GLFW_KEY_R;
-                int downCode = (ModKeyBindings.KEY_SHIFT_DOWN.getKey().getType() == InputConstants.Type.KEYSYM)
-                        ? ModKeyBindings.KEY_SHIFT_DOWN.getKey().getValue() : GLFW.GLFW_KEY_F;
-
-                boolean rawUp = (upCode != GLFW.GLFW_KEY_UNKNOWN) && InputConstants.isKeyDown(winKeys, upCode);
+                // Прямой опрос клавиш через GLFW для 100% надежного переключения при любом зажатом Alt
+                boolean rawUp = InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_R);
                 if (rawUp && !lastShiftUpKeyDown) {
                     shiftUpClicked = true;
                 }
                 lastShiftUpKeyDown = rawUp;
 
-                boolean rawDown = (downCode != GLFW.GLFW_KEY_UNKNOWN) && InputConstants.isKeyDown(winKeys, downCode);
+                boolean rawDown = InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_F);
                 if (rawDown && !lastShiftDownKeyDown) {
                     shiftDownClicked = true;
                 }
@@ -285,33 +280,17 @@ public class ClientEvents {
                     shiftDownLatchTicks = SHIFT_LATCH_TICKS;
                 }
 
-                // Защёлка для надёжной передачи через сеть
+                // Передача переключается четко и надежно (хоть с зажатым Alt, хоть без него!)
                 if (shiftUpLatchTicks > 0) {
-                    if (clutchDown) {
-                        if (!directTriggeredThisTick) {
-                            flags |= 512;
-                        }
-                    } else {
-                        flags |= 2048; // Clutchless shift attempt!
-                        if (shiftUpLatchTicks == SHIFT_LATCH_TICKS) {
-                            mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                                com.evgen.cardecor.init.ModSounds.CAR_IMPACT_LIGHT.get(), 0.65F, 0.75F));
-                        }
+                    if (!directTriggeredThisTick) {
+                        flags |= 512;
                     }
                     shiftUpLatchTicks--;
                 }
 
                 if (shiftDownLatchTicks > 0) {
-                    if (clutchDown) {
-                        if (!directTriggeredThisTick) {
-                            flags |= 1024;
-                        }
-                    } else {
-                        flags |= 2048; // Clutchless shift attempt!
-                        if (shiftDownLatchTicks == SHIFT_LATCH_TICKS) {
-                            mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
-                                com.evgen.cardecor.init.ModSounds.CAR_IMPACT_LIGHT.get(), 0.65F, 0.75F));
-                        }
+                    if (!directTriggeredThisTick) {
+                        flags |= 1024;
                     }
                     shiftDownLatchTicks--;
                 }
