@@ -59,6 +59,7 @@ public class PowertrainSolver {
     public float transmissionCondition = 100.0f;      // Состояние КПП [0..100]
     public boolean isClutchBurning = false;           // Горит ли сцепление
     public float clutchTempCelsius = 25.0f;           // Температура сцепления [°C]
+    public boolean isClutchLocked = false;            // Заблокировано ли сцепление (1-DOF)
 
     private float smoothedClutchClamp = 0.0f;         // Сжатие корзины [0..1]
     private float lastClutchTorqueNm = 0.0f;          // Переданный момент сцепления [Н*м]
@@ -66,6 +67,8 @@ public class PowertrainSolver {
     private float lastFrictionTorqueNm = 0.0f;        // Момент потерь [Н*м]
     private float couplingFactor = 0.0f;              // Фактор связи валов [0..1]
     private boolean revLimiterCut = false;            // Флаг отсечки топлива
+    private float prevDeltaOmega = 0.0f;              // Предыдущее рассогласование валов
+    private int prevGear = 0;                         // Предыдущая передача для детекции переключения
 
     public PowertrainSolver() {
         this(null);
@@ -204,6 +207,8 @@ public class PowertrainSolver {
             smoothedClutchClamp = 0.0f;
             lastClutchTorqueNm = 0.0f;
             couplingFactor = 0.0f;
+            isClutchLocked = false;
+            prevGear = gear;
 
             engineOmega += (netInternalEngineTorque / engineInertia) * dt;
             float minOmega = (targetIdleRpm * 0.70f) * RPM_TO_RAD_S;
@@ -219,6 +224,7 @@ public class PowertrainSolver {
         // Вперед (1..6): avgWheelAngularVel > 0, totalRatio > 0 -> transOmega > 0
         // Назад (R): avgWheelAngularVel < 0, totalRatio < 0 -> transOmega > 0!
         float transOmega = avgWheelAngularVel * totalRatio;
+        float transSyncRpm = transOmega * RAD_S_TO_RPM;
         float deltaOmega = engineOmega - transOmega;
 
         // 5. Плавный контроллер сжатия корзины сцепления
@@ -235,31 +241,68 @@ public class PowertrainSolver {
         float conditionFactor = Math.max(0.35f, Math.min(1.0f, this.transmissionCondition / 75.0f));
         float tCap = maxClutchTorqueNm * smoothedClutchClamp * conditionFactor;
 
-        // 6. Неявный решатель сцепления (Implicit Exact Projection)
-        if (tCap <= 0.01f) {
-            lastClutchTorqueNm = 0.0f;
-            couplingFactor = 0.0f;
+        // 6. Честный двухрежимный автомат состояний (LOCKED 1-DOF / SLIP 2-DOF)
+
+        // 1. Проверка условий принудительного размыкания LOCKED -> SLIP:
+        if (isClutchLocked) {
+            boolean stallRisk = (transSyncRpm < targetIdleRpm + 200.0f) && (userThrottle < 0.25f || transSyncRpm < targetIdleRpm);
+            boolean torqueExceeded = Math.abs(netInternalEngineTorque) > tCap;
+            if (clutchPedalPressed || gear != prevGear || stallRisk || torqueExceeded || smoothedClutchClamp < 0.75f) {
+                isClutchLocked = false;
+            }
+        }
+
+        // 2. Проверка условий защелкивания SLIP -> LOCKED (Zero-Crossing / Sync):
+        if (!isClutchLocked && !clutchPedalPressed && smoothedClutchClamp > 0.85f && transSyncRpm >= launchStartRpm) {
+            boolean crossedZero = (deltaOmega * prevDeltaOmega <= 0.0f);
+            boolean closeEnough = Math.abs(deltaOmega) < 8.0f;
+            if ((crossedZero || closeEnough) && Math.abs(netInternalEngineTorque) <= tCap) {
+                isClutchLocked = true;
+            }
+        }
+        prevDeltaOmega = deltaOmega;
+        prevGear = gear;
+
+        // 3. Расчет момента и скоростей по активному состоянию:
+        if (isClutchLocked) {
+            // РЕЖИМ 1-DOF (ЖЕСТКАЯ СЦЕПКА ВАЛОВ):
+            // Коленвал и первичный вал КПП — одно целое. 100% момента идет на ведущие колеса,
+            // а инерция маховика учитывается в BrushTireSolver через couplingFactor = 1.0f.
+            engineOmega = Math.max(targetIdleRpm * RPM_TO_RAD_S, transOmega);
+            currentRpm = engineOmega * RAD_S_TO_RPM;
+            lastClutchTorqueNm = netInternalEngineTorque;
+            couplingFactor = 1.0f;
         } else {
-            // Момент, передающий весь чистый момент ДВС на колеса
-            // плюс мягкое демпфирование рассогласования валов без численной пилы:
-            float relaxationStiffness = 0.45f * (engineInertia / dt);
-            float desiredSyncTorque = netInternalEngineTorque + relaxationStiffness * deltaOmega;
+            // РЕЖИМ 2-DOF (SLIP — ПРОБУКСОВКА ПРИ ТРОГАНИИ ИЛИ ПЕРЕКЛЮЧЕНИИ):
+            float slipNorm = deltaOmega / clutchSlipBandRadS;
+            lastClutchTorqueNm = tCap * fastTanh(slipNorm);
 
-            // Ограничение физическими возможностями корзины:
-            lastClutchTorqueNm = clamp(desiredSyncTorque, -tCap, tCap);
-
-            // Плавная защита от заглухания при трогании (Continuous Anti-Stall)
-            if (transOmega < launchStartRpm * RPM_TO_RAD_S) {
-                float stallGuard = clamp((currentRpm - targetIdleRpm) / (launchFullLockRpm - targetIdleRpm), 0.0f, 1.0f);
-                float maxLaunchTorque = tCap * (stallGuard * stallGuard);
-                if (lastClutchTorqueNm > maxLaunchTorque) {
-                    lastClutchTorqueNm = maxLaunchTorque;
+            // Плавный резерв момента при трогании с места, чтобы стоящие колеса не задушили мотор ниже холостых:
+            if (transSyncRpm < launchStartRpm && userThrottle > 0.02f) {
+                float reserve = clamp((currentRpm - targetIdleRpm) / (launchFullLockRpm - targetIdleRpm), 0.0f, 1.0f);
+                float maxAllowable = Math.max(0.0f, netInternalEngineTorque * (0.25f + 0.75f * reserve));
+                if (lastClutchTorqueNm > maxAllowable) {
+                    lastClutchTorqueNm = maxAllowable;
                 }
             }
 
-            // Коэффициент жесткости сцепки валов [0..1] для эффективной инерции:
-            float slipRatio = clamp(Math.abs(deltaOmega) / 25.0f, 0.0f, 1.0f);
-            couplingFactor = smoothedClutchClamp * (1.0f - slipRatio);
+            float crankAccel = (netInternalEngineTorque - lastClutchTorqueNm) / engineInertia;
+            engineOmega += crankAccel * dt;
+
+            if (currentGear > 0 && !clutchPedalPressed && engineOmega < (targetIdleRpm * 0.45f) * RPM_TO_RAD_S) {
+                this.isEngineStalled = true;
+                this.isEngineOn = false;
+                engineOmega = 0.0f;
+            } else {
+                float minAliveOmega = (targetIdleRpm * 0.70f) * RPM_TO_RAD_S;
+                if (engineOmega < minAliveOmega) {
+                    engineOmega = minAliveOmega;
+                }
+            }
+            currentRpm = engineOmega * RAD_S_TO_RPM;
+
+            // В режиме SLIP колеса развязаны с маховиком (крутятся легко со своей инерцией):
+            couplingFactor = 0.0f;
         }
 
         // Тепловой баланс сцепления
@@ -271,23 +314,6 @@ public class PowertrainSolver {
         if (clutchTempCelsius > 280.0f) {
             transmissionCondition = Math.max(0.0f, transmissionCondition - dt * 0.5f);
         }
-
-        // 7. Интеграция коленвала ДВС
-        float crankAccel = (netInternalEngineTorque - lastClutchTorqueNm) / engineInertia;
-        engineOmega += crankAccel * dt;
-
-        if (currentGear > 0 && !clutchPedalPressed && engineOmega < (targetIdleRpm * 0.45f) * RPM_TO_RAD_S) {
-            this.isEngineStalled = true;
-            this.isEngineOn = false;
-            engineOmega = 0.0f;
-        } else {
-            float minAliveOmega = (targetIdleRpm * 0.70f) * RPM_TO_RAD_S;
-            if (engineOmega < minAliveOmega) {
-                engineOmega = minAliveOmega;
-            }
-        }
-
-        currentRpm = engineOmega * RAD_S_TO_RPM;
 
         // 8. Выходной крутящий момент на ведущие колеса
         return lastClutchTorqueNm * totalRatio * transmissionEfficiency;
@@ -360,4 +386,5 @@ public class PowertrainSolver {
     public float getLastClutchTorqueNm() { return lastClutchTorqueNm; }
     public float getLastEngineTorqueNm() { return lastEngineTorqueNm; }
     public float getCouplingFactor() { return couplingFactor; }
+    public boolean isClutchLocked() { return isClutchLocked; }
 }

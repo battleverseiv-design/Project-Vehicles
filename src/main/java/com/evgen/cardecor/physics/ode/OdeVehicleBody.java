@@ -740,7 +740,7 @@ public class OdeVehicleBody {
             float effectiveInertia = isDriven ? effectiveDrivenInertia : wheelBaseInertia;
             wheelStates[i].wheelInertia = effectiveInertia;
             wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, effectiveInertia);
-            wheelStates[i].isClutchLocked = false;
+            wheelStates[i].isClutchLocked = isDriven && powertrain.isClutchLocked;
             wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
         }
 
