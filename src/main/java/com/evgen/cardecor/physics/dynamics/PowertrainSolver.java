@@ -101,15 +101,15 @@ public class PowertrainSolver {
     public void shiftUp() {
         if (currentGear == -1) {
             currentGear = 0;
-            shiftCooldown = 0.15f;
+            shiftCooldown = 0.08f;
             justShifted = true;
         } else if (currentGear == 0) {
             currentGear = 1;
-            shiftCooldown = 0.15f;
+            shiftCooldown = 0.08f;
             justShifted = true;
         } else if (currentGear < forwardGearRatios.length) {
             currentGear++;
-            shiftCooldown = 0.15f;
+            shiftCooldown = 0.08f;
             justShifted = true;
         }
     }
@@ -117,15 +117,15 @@ public class PowertrainSolver {
     public void shiftDown() {
         if (currentGear > 1) {
             currentGear--;
-            shiftCooldown = 0.15f;
+            shiftCooldown = 0.08f;
             justShifted = true;
         } else if (currentGear == 1) {
             currentGear = 0;
-            shiftCooldown = 0.15f;
+            shiftCooldown = 0.08f;
             justShifted = true;
         } else if (currentGear == 0) {
             currentGear = -1;
-            shiftCooldown = 0.15f;
+            shiftCooldown = 0.08f;
             justShifted = true;
         }
     }
@@ -133,7 +133,7 @@ public class PowertrainSolver {
     public void selectDirectGear(int gear) {
         if (gear >= -1 && gear <= forwardGearRatios.length) {
             currentGear = gear;
-            shiftCooldown = 0.15f;
+            shiftCooldown = 0.08f;
             justShifted = true;
         }
     }
@@ -208,7 +208,6 @@ public class PowertrainSolver {
             lastClutchTorqueNm = 0.0f;
             couplingFactor = 0.0f;
             isClutchLocked = false;
-            prevGear = gear;
 
             engineOmega += (netInternalEngineTorque / engineInertia) * dt;
             float minOmega = (targetIdleRpm * 0.70f) * RPM_TO_RAD_S;
@@ -226,6 +225,12 @@ public class PowertrainSolver {
         float transOmega = avgWheelAngularVel * totalRatio;
         float transSyncRpm = transOmega * RAD_S_TO_RPM;
         float deltaOmega = engineOmega - transOmega;
+
+        // При смене передачи сразу пересчитываем prevDeltaOmega без ложного знака со старой передачи
+        if (gear != prevGear) {
+            prevDeltaOmega = deltaOmega;
+            isClutchLocked = false;
+        }
 
         // 5. Плавный контроллер сжатия корзины сцепления
         float targetClamp;
@@ -252,19 +257,7 @@ public class PowertrainSolver {
             }
         }
 
-        // 2. Проверка условий защелкивания SLIP -> LOCKED (Zero-Crossing / Sync):
-        float minLockRpm = (gear >= 2) ? targetIdleRpm : launchStartRpm;
-        if (!isClutchLocked && !clutchPedalPressed && smoothedClutchClamp > 0.85f && transSyncRpm >= minLockRpm) {
-            boolean crossedZero = (deltaOmega * prevDeltaOmega <= 0.0f);
-            boolean closeEnough = Math.abs(deltaOmega) < 15.0f;
-            if (crossedZero || closeEnough) {
-                isClutchLocked = true;
-            }
-        }
-        prevDeltaOmega = deltaOmega;
-        prevGear = gear;
-
-        // 3. Расчет момента и скоростей по активному состоянию:
+        // 2. Расчет момента и скоростей по активному состоянию:
         if (isClutchLocked) {
             // РЕЖИМ 1-DOF (ЖЕСТКАЯ СЦЕПКА ВАЛОВ):
             // Коленвал и первичный вал КПП — одно целое. 100% момента идет на ведущие колеса,
@@ -275,36 +268,59 @@ public class PowertrainSolver {
             couplingFactor = 1.0f;
         } else {
             // РЕЖИМ 2-DOF (SLIP — ПРОБУКСОВКА ПРИ ТРОГАНИИ ИЛИ ПЕРЕКЛЮЧЕНИИ):
-            float slipNorm = deltaOmega / clutchSlipBandRadS;
-            lastClutchTorqueNm = tCap * fastTanh(slipNorm);
+            // Точный момент для достижения engineOmega == transOmega ровно за 1 подшаг dt:
+            float exactSyncTorque = netInternalEngineTorque + (engineInertia / dt) * deltaOmega;
 
-            // Плавный резерв момента при трогании с места, чтобы стоящие колеса не задушили мотор ниже холостых:
-            if (transSyncRpm < launchStartRpm && userThrottle > 0.02f) {
-                float reserve = clamp((currentRpm - targetIdleRpm) / (launchFullLockRpm - targetIdleRpm), 0.0f, 1.0f);
-                float maxAllowable = Math.max(0.0f, netInternalEngineTorque * (0.25f + 0.75f * reserve));
-                if (lastClutchTorqueNm > maxAllowable) {
-                    lastClutchTorqueNm = maxAllowable;
-                }
-            }
-
-            float crankAccel = (netInternalEngineTorque - lastClutchTorqueNm) / engineInertia;
-            engineOmega += crankAccel * dt;
-
-            if (currentGear > 0 && !clutchPedalPressed && engineOmega < (targetIdleRpm * 0.45f) * RPM_TO_RAD_S) {
-                this.isEngineStalled = true;
-                this.isEngineOn = false;
-                engineOmega = 0.0f;
+            // Если корзина сцепления tCap способна выдать этот момент (и мы уже выше оборотов старта):
+            float minLockRpm = (Math.abs(gear) >= 2) ? targetIdleRpm : launchStartRpm;
+            if (!clutchPedalPressed && smoothedClutchClamp > 0.80f && transSyncRpm >= minLockRpm && Math.abs(exactSyncTorque) <= tCap) {
+                // Бесшовный физический захват в LOCKED с сохранением 100% импульса маховика!
+                lastClutchTorqueNm = exactSyncTorque;
+                engineOmega = transOmega;
+                currentRpm = engineOmega * RAD_S_TO_RPM;
+                isClutchLocked = true;
+                couplingFactor = 1.0f;
             } else {
-                float minAliveOmega = (targetIdleRpm * 0.70f) * RPM_TO_RAD_S;
-                if (engineOmega < minAliveOmega) {
-                    engineOmega = minAliveOmega;
+                // Честное скольжение (SLIP): момент Кулона ограничен сверху exactSyncTorque,
+                // чтобы маховик НИКОГДА не мог перелететь через скорость трансмиссии или отдать больше энергии, чем в нем запасено!
+                float coulombTorque = tCap * fastTanh(deltaOmega / clutchSlipBandRadS);
+                if (coulombTorque * exactSyncTorque > 0.0f && Math.abs(coulombTorque) > Math.abs(exactSyncTorque)) {
+                    lastClutchTorqueNm = exactSyncTorque;
+                } else {
+                    lastClutchTorqueNm = coulombTorque;
                 }
-            }
-            currentRpm = engineOmega * RAD_S_TO_RPM;
 
-            // В режиме SLIP колеса развязаны с маховиком (крутятся легко со своей инерцией):
-            couplingFactor = 0.0f;
+                // Резерв момента при старте с места (только для 1-й и R, когда колеса еще медленнее launchStartRpm):
+                if (Math.abs(gear) <= 1 && transSyncRpm < launchStartRpm && userThrottle > 0.02f) {
+                    float reserve = clamp((currentRpm - targetIdleRpm) / (launchFullLockRpm - targetIdleRpm), 0.0f, 1.0f);
+                    float maxAllowable = Math.max(0.0f, netInternalEngineTorque * (0.25f + 0.75f * reserve));
+                    if (lastClutchTorqueNm > maxAllowable) {
+                        lastClutchTorqueNm = maxAllowable;
+                    }
+                }
+
+                float crankAccel = (netInternalEngineTorque - lastClutchTorqueNm) / engineInertia;
+                engineOmega += crankAccel * dt;
+
+                if (currentGear > 0 && !clutchPedalPressed && engineOmega < (targetIdleRpm * 0.45f) * RPM_TO_RAD_S) {
+                    this.isEngineStalled = true;
+                    this.isEngineOn = false;
+                    engineOmega = 0.0f;
+                } else {
+                    float minAliveOmega = (targetIdleRpm * 0.70f) * RPM_TO_RAD_S;
+                    if (engineOmega < minAliveOmega) {
+                        engineOmega = minAliveOmega;
+                    }
+                }
+                currentRpm = engineOmega * RAD_S_TO_RPM;
+
+                // Плавное подключение инерции по мере сближения валов, чтобы колеса не срывались в микро-юз при смыкании:
+                float syncProximity = 1.0f - clamp(Math.abs(deltaOmega) / 40.0f, 0.0f, 1.0f);
+                couplingFactor = smoothedClutchClamp * syncProximity * 0.5f;
+            }
         }
+        prevDeltaOmega = deltaOmega;
+        prevGear = gear;
 
         // Тепловой баланс сцепления
         float slipHeatWatts = Math.abs(lastClutchTorqueNm) * Math.abs(deltaOmega);
