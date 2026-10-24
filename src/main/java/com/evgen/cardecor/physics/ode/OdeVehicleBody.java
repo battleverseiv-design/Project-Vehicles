@@ -793,6 +793,7 @@ public class OdeVehicleBody {
                 wheelProbes[i] = probe;
             }
 
+            double rayUpOffset = 0.30;
             double castDist = suspensionRestLength + spec.xDroop + wheelRadius;
             BlockHitResult bestHit = null;
 
@@ -802,13 +803,14 @@ public class OdeVehicleBody {
                 double ry = wy + wf.y * offsetFwd;
                 double rz = wz + wf.z * offsetFwd;
 
-                Vec3 rayStart = new Vec3(rx, ry, rz);
+                Vec3 rayStart = new Vec3(rx + upX * rayUpOffset, ry + upY * rayUpOffset, rz + upZ * rayUpOffset);
                 Vec3 rayEnd = new Vec3(rx - upX * castDist, ry - upY * castDist, rz - upZ * castDist);
                 BlockHitResult hit = level.clip(new ClipContext(rayStart, rayEnd, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this.entityOwner));
                 boolean hitGround = (hit.getType() == HitResult.Type.BLOCK && hit.getDirection() != Direction.DOWN);
                 if (hitGround) {
-                    double d = rayStart.distanceTo(hit.getLocation());
-                    tempProbeDistances[j] = d;
+                    double dFromStart = rayStart.distanceTo(hit.getLocation());
+                    double dFromMount = Math.max(0.0, dFromStart - rayUpOffset);
+                    tempProbeDistances[j] = dFromMount;
                     if (bestHit == null || j == 0) {
                         bestHit = hit;
                     }

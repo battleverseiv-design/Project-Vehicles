@@ -314,9 +314,9 @@ public class PowertrainSolver {
                 }
                 currentRpm = engineOmega * RAD_S_TO_RPM;
 
-                // Плавное подключение инерции по мере сближения валов, чтобы колеса не срывались в микро-юз при смыкании:
-                float syncProximity = 1.0f - clamp(Math.abs(deltaOmega) / 40.0f, 0.0f, 1.0f);
-                couplingFactor = smoothedClutchClamp * syncProximity * 0.5f;
+                // При сжатом сцеплении отраженная инерция маховика I_e * G^2 честно передается на ведущие колеса,
+                // предотвращая паразитный срыв колес в букс на 2-й и высших передачах при переключении:
+                couplingFactor = smoothedClutchClamp;
             }
         }
         prevDeltaOmega = deltaOmega;
