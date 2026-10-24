@@ -6,6 +6,7 @@ import com.evgen.cardecor.physics.dynamics.JoltStylePowertrain;
 import com.evgen.cardecor.physics.dynamics.BulletWheelFriction;
 import com.evgen.cardecor.physics.dynamics.MarcoMonsterAero;
 import com.evgen.cardecor.physics.dynamics.PowertrainSpec;
+import com.evgen.cardecor.physics.dynamics.PowertrainSolver;
 import com.evgen.cardecor.physics.dynamics.PowertrainState;
 import com.evgen.cardecor.physics.dynamics.SurfaceProfile;
 import com.evgen.cardecor.physics.dynamics.SteeringRack;
@@ -68,7 +69,7 @@ public class OdeVehicleBody {
 
     // Powertrain and transmission
     public final PowertrainSpec powertrainSpec = PowertrainSpec.createFamilySedan();
-    public final PowertrainState powertrain = new PowertrainState(powertrainSpec);
+    public final PowertrainSolver powertrain = new PowertrainSolver(powertrainSpec);
     public final SteeringRack steeringRack = new SteeringRack();
     public String drivetrain = "rwd";
 
@@ -466,6 +467,7 @@ public class OdeVehicleBody {
                 this.powertrainSpec.revLimiterRpm = (float) (ec.redlineRpm + 250.0);
             }
             if (ec.torqueNm > 50.0) this.powertrainSpec.maxTorqueNm = (float) ec.torqueNm;
+            this.powertrain.configureFromSpec(this.powertrainSpec);
         }
 
         // 2. Wheel positions & dynamic suspension mounts based on static sag
@@ -713,16 +715,13 @@ public class OdeVehicleBody {
 
         // 3. Jolt Physics Powertrain Update (Engine RPM, Clutch, Multi-gear Transmission)
         float forwardSpeedMps = tempLinVel.dot(tempLocalFwd);
-        float totalWheelTorqueNm = powertrain.updatePowertrain(
+        float totalWheelTorqueNm = powertrain.isEngineOn ? powertrain.step(
                 dt,
                 throttleInput,
-                forwardSpeedMps,
+                powertrain.clutchPedalPressed,
                 avgDrivenWheelAngularVel,
-                groundedWheelsCount > 0,
-                maxDrivenWheelSlip,
-                this.lastRoadReactionTorque,
-                totalDrivenWheelInertia
-        );
+                powertrain.currentGear
+        ) : 0.0f;
 
         float driveTorquePerWheel = drivenCount > 0 ? (totalWheelTorqueNm / drivenCount) : 0.0f;
         if (this.impactCutoffActive) {
@@ -731,38 +730,18 @@ public class OdeVehicleBody {
         }
         this.baseDriveForce = driveTorquePerWheel / Math.max(0.1f, wheelRadius);
 
-        // Динамический расчет отраженной инерции двигателя и кинематического лимита для каждого колеса
-        float gearRatio = 0.0f;
-        if (powertrain.currentGear == -1) {
-            gearRatio = powertrainSpec.reverseGearRatio * powertrainSpec.differentialRatio;
-        } else if (powertrain.currentGear > 0 && powertrain.currentGear <= powertrainSpec.gearRatios.length) {
-            gearRatio = powertrainSpec.gearRatios[powertrain.currentGear - 1] * powertrainSpec.differentialRatio;
-        }
-        float totalRatio = gearRatio;
+        // Динамический расчет честной инерции колес с непрерывным couplingFactor
+        float effectiveDrivenInertia = powertrain.getEffectiveDrivenWheelInertia(wheelBaseInertia, powertrain.currentGear, drivenCount);
 
         for (int i = 0; i < 4; i++) {
             boolean isFront = (i < 2);
             boolean isDriven = drivetrain.equals("fwd") ? isFront : (drivetrain.equals("awd") || drivetrain.equals("4wd") ? true : !isFront);
 
-            float effectiveInertia = BrushTireSolver.getEffectiveWheelInertia(
-                    wheelBaseInertia,
-                    isDriven,
-                    powertrain.clutchPedalPressed,
-                    powertrainSpec.engineInertia,
-                    totalRatio,
-                    drivenCount
-            );
+            float effectiveInertia = isDriven ? effectiveDrivenInertia : wheelBaseInertia;
             wheelStates[i].wheelInertia = effectiveInertia;
             wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, effectiveInertia);
-
-            if (powertrain.isEngineOn && isDriven && !powertrain.clutchPedalPressed && Math.abs(totalRatio) > 0.01f) {
-                float engineOmega = powertrain.currentRpm * JoltStylePowertrain.RPM_TO_RAD_PER_SEC;
-                wheelStates[i].isClutchLocked = powertrain.isClutchLocked;
-                wheelStates[i].maxAllowedOmega = powertrain.isClutchLocked ? (engineOmega / totalRatio) : Float.MAX_VALUE;
-            } else {
-                wheelStates[i].isClutchLocked = false;
-                wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
-            }
+            wheelStates[i].isClutchLocked = false;
+            wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
         }
 
         groundedWheelsCount = 0;
