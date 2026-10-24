@@ -232,7 +232,7 @@ public class PowertrainSolver {
         if (clutchPedalPressed) {
             targetClamp = 0.0f;
         } else {
-            targetClamp = computeSmoothAutoClutch(userThrottle, transOmega);
+            targetClamp = computeSmoothAutoClutch(userThrottle, transOmega, gear);
         }
 
         float rate = (targetClamp < smoothedClutchClamp) ? clutchDisengageRate : clutchEngageRate;
@@ -245,7 +245,7 @@ public class PowertrainSolver {
 
         // 1. Проверка условий принудительного размыкания LOCKED -> SLIP:
         if (isClutchLocked) {
-            boolean stallRisk = (transSyncRpm < targetIdleRpm + 200.0f) && (userThrottle < 0.25f || transSyncRpm < targetIdleRpm);
+            boolean stallRisk = (transSyncRpm < targetIdleRpm - 50.0f) && (userThrottle < 0.1f);
             boolean torqueExceeded = Math.abs(netInternalEngineTorque) > tCap;
             if (clutchPedalPressed || gear != prevGear || stallRisk || torqueExceeded || smoothedClutchClamp < 0.75f) {
                 isClutchLocked = false;
@@ -253,10 +253,11 @@ public class PowertrainSolver {
         }
 
         // 2. Проверка условий защелкивания SLIP -> LOCKED (Zero-Crossing / Sync):
-        if (!isClutchLocked && !clutchPedalPressed && smoothedClutchClamp > 0.85f && transSyncRpm >= launchStartRpm) {
+        float minLockRpm = (gear >= 2) ? targetIdleRpm : launchStartRpm;
+        if (!isClutchLocked && !clutchPedalPressed && smoothedClutchClamp > 0.85f && transSyncRpm >= minLockRpm) {
             boolean crossedZero = (deltaOmega * prevDeltaOmega <= 0.0f);
-            boolean closeEnough = Math.abs(deltaOmega) < 8.0f;
-            if ((crossedZero || closeEnough) && Math.abs(netInternalEngineTorque) <= tCap) {
+            boolean closeEnough = Math.abs(deltaOmega) < 15.0f;
+            if (crossedZero || closeEnough) {
                 isClutchLocked = true;
             }
         }
@@ -322,17 +323,27 @@ public class PowertrainSolver {
     /**
      * Гладкая карта автоматического сцепления без ступенчатых скачков.
      */
-    private float computeSmoothAutoClutch(float userThrottle, float transOmega) {
+    private float computeSmoothAutoClutch(float userThrottle, float transOmega, int gear) {
         float syncRpm = transOmega * RAD_S_TO_RPM;
-        float speedLock = clamp((syncRpm - 900.0f) / 900.0f, 0.0f, 1.0f);
 
+        // На 2-й передаче и выше сцепление ВСЕГДА полностью сомкнуто (1.0f),
+        // кроме случая полной остановки / падения ниже холостых (Anti-Stall < 800 RPM):
+        if (gear >= 2) {
+            if (syncRpm < targetIdleRpm - 50.0f && userThrottle < 0.05f) {
+                return 0.0f; // Защита от заглухания при торможении в пол на высокой передаче
+            }
+            return 1.0f;
+        }
+
+        // Для 1-й (gear == 1) и Задней (gear == -1) передачи:
+        // Как только вал КПП раскрутился до 1100 RPM (~6-7 км/ч) — полное смыкание 1.0f!
+        float speedLock = clamp((syncRpm - 750.0f) / 350.0f, 0.0f, 1.0f);
         if (userThrottle < 0.02f) {
             return speedLock;
         }
 
         float rpmLock = clamp((currentRpm - launchStartRpm) / (launchFullLockRpm - launchStartRpm), 0.0f, 1.0f);
         float smoothRpmLock = rpmLock * rpmLock * (3.0f - 2.0f * rpmLock);
-
         return Math.max(smoothRpmLock, speedLock);
     }
 
