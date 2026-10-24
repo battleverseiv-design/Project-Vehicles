@@ -51,6 +51,7 @@ public class ClientEvents {
     private static int lastVehicleId = -1;
     private static boolean lastGasPressed = false;
     private static boolean lastBrakePressed = false;
+    private static boolean lastClutchPressed = false;
     private static int lastDriverGear = 0;
     private static int spaceHoldTicks = 0;
     private static VehicleCabinRainSoundInstance cabinRainSound = null;
@@ -220,6 +221,15 @@ public class ClientEvents {
                 }
                 long winKeys = mc.getWindow().getWindow();
                 boolean clutchDown = ModKeyBindings.KEY_CLUTCH.isDown() || InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_LEFT_ALT);
+                if (clutchDown && !lastClutchPressed) {
+                    mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                        com.evgen.cardecor.init.ModSounds.PEDAL_PRESS.get(), 1.0F, 0.9F));
+                } else if (!clutchDown && lastClutchPressed) {
+                    mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                        com.evgen.cardecor.init.ModSounds.CLUTCH_RELEASE.get(), 1.0F, 1.0F));
+                }
+                lastClutchPressed = clutchDown;
+
                 if (clutchDown) {
                     flags |= 256;
                 }

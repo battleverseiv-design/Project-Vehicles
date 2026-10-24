@@ -4290,9 +4290,12 @@ public class DrivableVehicleEntity extends Entity {
                 this.setYRot(currentYaw);
             }
 
-            this.physics.tireCondition = this.tireCondition;
-            this.physics.isParkingBrake = isParkingBrakeOn();
-            Vec3 deltaMotion = physics.step(this.level(), this.position(), currentYaw, throttle, steer, handbrake, boostInput, this.onGround(), this.isEngineOn(), 0.05);
+            Vec3 deltaMotion = Vec3.ZERO;
+            if (this.odeBody == null || this.odeBody.body == null) {
+                this.physics.tireCondition = this.tireCondition;
+                this.physics.isParkingBrake = isParkingBrakeOn();
+                deltaMotion = physics.step(this.level(), this.position(), currentYaw, throttle, steer, handbrake, boostInput, this.onGround(), this.isEngineOn(), 0.05);
+            }
 
             if (!this.level().isClientSide && Math.abs(this.physics.speed) > 0.4) {
                 float wearPerTick = 0.0005F;
@@ -4510,7 +4513,7 @@ public class DrivableVehicleEntity extends Entity {
                 }
             }
 
-            if (physics.justShifted) {
+            if (this.odeBody == null && physics.justShifted) {
                 physics.justShifted = false;
                 this.entityData.set(GEAR, physics.currentGear);
                 ServerPlayer driverPlayer = (this.getFirstPassenger() instanceof ServerPlayer sp) ? sp : null;
