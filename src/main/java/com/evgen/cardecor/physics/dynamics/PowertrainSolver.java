@@ -44,7 +44,7 @@ public class PowertrainSolver {
 
     // Оценка суммарной собственной инерции ведущих колес со ступицами и полуосями [кг*м^2]
     // Используется только для расчета порога анти-осцилляционного демпфирования валов
-    public float totalDrivenWheelsBaseInertia = 2.8f; // 2 колеса по 1.4 кг*м^2
+    public float totalDrivenWheelsBaseInertia = 240.0f; // 2 колеса + приведенная масса кузова ~1650 кг на плече R_w^2
 
     // --- 4. Динамическое состояние (Runtime State) ---
     public float engineOmega = 850.0f * RPM_TO_RAD_S; // Текущая угловая скорость коленвала [рад/с]
@@ -154,7 +154,26 @@ public class PowertrainSolver {
     ) {
         this.currentGear = currentGear;
         this.clutchPedalPressed = clutchPedalPressed;
-        this.isBraking = (throttleInput < -0.01f);
+
+        float userThrottle;
+        if (currentGear == -1) {
+            // На задней передаче: клавиша S (throttleInput < -0.01) — это газ назад!
+            if (throttleInput < -0.01f) {
+                userThrottle = Math.abs(throttleInput);
+                this.isBraking = false;
+            } else if (throttleInput > 0.01f) {
+                // Клавиша W на заднем ходу — это рабочий тормоз
+                userThrottle = 0.0f;
+                this.isBraking = true;
+            } else {
+                userThrottle = 0.0f;
+                this.isBraking = false;
+            }
+        } else {
+            // Передние передачи и нейтраль: W — газ, S — тормоз
+            this.isBraking = (throttleInput < -0.01f);
+            userThrottle = clamp(throttleInput, 0.0f, 1.0f);
+        }
 
         if (shiftCooldown > 0.0f) {
             shiftCooldown = Math.max(0.0f, shiftCooldown - dt);
@@ -169,9 +188,6 @@ public class PowertrainSolver {
             currentRpm = engineOmega * RAD_S_TO_RPM;
             return 0.0f;
         }
-
-        // Ограничиваем входной газ диапазоном [0..1]
-        float userThrottle = clamp(throttleInput, 0.0f, 1.0f);
 
         // ---------------------------------------------------------------------
         // ШАГ 1: РЕГУЛЯТОР ХОЛОСТОГО ХОДА (Idle Governor / РХХ) И ОТСЕЧКА (Rev Limiter)
@@ -288,8 +304,10 @@ public class PowertrainSolver {
             float freeEngineAccel = netInternalEngineTorque / engineInertia;
             float maxSyncTorque = reducedInertia * ((deltaOmega / dt) + freeEngineAccel);
 
-            // Ограничиваем регуляризованный момент Кулона пределом устойчивости шага dt:
-            if (Math.abs(coulombRawTorque) > Math.abs(maxSyncTorque) && (coulombRawTorque * maxSyncTorque >= 0.0f)) {
+            // Если требуемый для синхронизации момент укладывается в емкость корзины tCap:
+            // Валы сомкнуты (LOCKED) — передаем полный рабочий момент ДВС без искусственной просадки в ноль!
+            // Если нагрузка выше tCap — сцепление пробуксовывает (SLIP) с предельным моментом Кулона.
+            if (Math.abs(maxSyncTorque) <= tCap && (maxSyncTorque * deltaOmega >= -1.0f)) {
                 lastClutchTorqueNm = maxSyncTorque;
             } else {
                 lastClutchTorqueNm = coulombRawTorque;
@@ -299,14 +317,11 @@ public class PowertrainSolver {
             lastClutchTorqueNm = clamp(lastClutchTorqueNm, -tCap, tCap);
 
             // 5.3. Защита от удушения мотора стоящими колесами (Anti-Deadlock Torque Reserve):
-            // Если колеса еще почти стоят (transOmega < холостых), а водитель жмет газ (W),
-            // сцепление в фазе пробуксовки не может отобрать у мотора больше момента,
-            // чем мотор вырабатывает на текущих оборотах, пока RPM не выйдет в зону лаунча!
-            if (userThrottle > 0.05f && transOmega < targetIdleRpm * RPM_TO_RAD_S && currentRpm < launchFullLockRpm) {
-                // Оставляем минимум 20% момента на гарантированную раскрутку маховика вверх!
+            // Если колеса еще почти стоят, а водитель жмет газ, не позволяем сцеплению отбирать > 80% момента
+            if (userThrottle > 0.05f && Math.abs(transOmega) < targetIdleRpm * RPM_TO_RAD_S && currentRpm < launchFullLockRpm) {
                 float maxAllowedLoadOnLaunch = Math.max(0.0f, netInternalEngineTorque * 0.80f);
-                if (lastClutchTorqueNm > maxAllowedLoadOnLaunch) {
-                    lastClutchTorqueNm = maxAllowedLoadOnLaunch;
+                if (Math.abs(lastClutchTorqueNm) > maxAllowedLoadOnLaunch) {
+                    lastClutchTorqueNm = Math.copySign(maxAllowedLoadOnLaunch, lastClutchTorqueNm);
                 }
             }
 

@@ -589,7 +589,7 @@ public class FabricClientEvents {
             }
             float rpm = vehicle.getEntityData().get(DrivableVehicleEntity.RPM);
             int gear = vehicle.getCurrentGear();
-            String gearText = (gear <= 0) ? "R" : String.valueOf(gear);
+            String gearText = (gear < 0) ? "R" : (gear == 0 ? "N" : String.valueOf(gear));
 
             int hudW = 120;
             int hudH = 46;

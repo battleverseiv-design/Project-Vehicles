@@ -770,7 +770,7 @@ public class ClientEvents {
         }
         float rpm = vehicle.getEntityData().get(DrivableVehicleEntity.RPM);
         int gear = vehicle.getCurrentGear();
-        String gearText = (gear <= 0) ? "R" : String.valueOf(gear);
+        String gearText = (gear < 0) ? "R" : (gear == 0 ? "N" : String.valueOf(gear));
 
         // Expanded informative dashboard badge in bottom-right corner
         int hudW = 120;
