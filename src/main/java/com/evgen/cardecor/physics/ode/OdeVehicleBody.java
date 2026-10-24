@@ -939,13 +939,38 @@ public class OdeVehicleBody {
             float cond = (i < tireCondition.length) ? tireCondition[i] : 100.0f;
             boolean isPopped = cond <= 0.0f;
 
+            float carInertiaPerDrivenWheel = (drivenCount > 0)
+                    ? ((this.mass * 0.45f) * (wheelRadius * wheelRadius)) / drivenCount
+                    : 0.0f;
+
             if (!wheelGrounded[i]) {
                 wheelSlipRatio[i] = 0.0f;
+                wheelStates[i].wheelInertia = isDriven ? effectiveDrivenInertia : wheelBaseInertia;
+                wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, wheelStates[i].wheelInertia);
+                wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
                 float freeDriveT = (isDriven && !isPopped) ? driveTorquePerWheel : 0.0f;
                 float freeBrakeT = (handbrakeInput && !isFront) ? 4500.0f : (powertrain.isBraking ? 2500.0f : 0.0f);
                 BrushTireSolver.solveWheelStep(wheelStates[i], 0.0f, 0.0f, 0.0f, freeDriveT, freeBrakeT, 0.0f, dt, 1.0f);
                 wheelAngularVel[i] = wheelStates[i].angularVelocity;
                 continue;
+            }
+
+            // На земле: при сцеплении (s < 0.70) колесо связано с приведенной массой кузова,
+            // при срыве в пробуксовку (s > 1.20) спадает до чистой инерции трансмиссии (честный букс/клатч-кик)
+            float tractionGrip = Mth.clamp(1.0f - (wheelStates[i].outCombinedSlipNorm - 0.70f) / 0.50f, 0.0f, 1.0f);
+            float effectiveInertia = isDriven
+                    ? (effectiveDrivenInertia + carInertiaPerDrivenWheel * tractionGrip)
+                    : (wheelBaseInertia + carInertiaPerDrivenWheel * 0.5f * tractionGrip);
+            wheelStates[i].wheelInertia = effectiveInertia;
+            wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, effectiveInertia);
+            wheelStates[i].isClutchLocked = isDriven && powertrain.isClutchLocked;
+
+            if (isDriven && powertrain.isClutchLocked && Math.abs(powertrain.getTotalGearRatio(powertrain.currentGear)) > 0.01f) {
+                float totalRatio = powertrain.getTotalGearRatio(powertrain.currentGear);
+                float syncWheelOmega = powertrain.getEngineOmega() / totalRatio;
+                wheelStates[i].maxAllowedOmega = (syncWheelOmega >= 0.0f) ? (syncWheelOmega * 1.08f) : (syncWheelOmega * 1.08f);
+            } else {
+                wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
             }
 
             Vector3f curWheelFwd = wheelFwdVec[i];

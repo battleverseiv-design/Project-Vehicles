@@ -240,7 +240,8 @@ public class PowertrainSolver {
             targetClamp = computeSmoothAutoClutch(userThrottle, transOmega, gear);
         }
 
-        float rate = (targetClamp < smoothedClutchClamp) ? clutchDisengageRate : clutchEngageRate;
+        float engageRate = (gear >= 2) ? 25.0f : clutchEngageRate;
+        float rate = (targetClamp < smoothedClutchClamp) ? clutchDisengageRate : engageRate;
         smoothedClutchClamp += (targetClamp - smoothedClutchClamp) * clamp(dt * rate, 0.0f, 1.0f);
 
         float conditionFactor = Math.max(0.35f, Math.min(1.0f, this.transmissionCondition / 75.0f));

@@ -196,6 +196,7 @@ public class DeferredHeadlightRenderer {
             }
 
             // Create Fullscreen Quad VAO & VBO
+            int prevInitVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
             vao = GL30.glGenVertexArrays();
             GL30.glBindVertexArray(vao);
 
@@ -216,7 +217,7 @@ public class DeferredHeadlightRenderer {
             GL20.glEnableVertexAttribArray(1); // aTexCoord
             GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, 20, 12L);
 
-            GL30.glBindVertexArray(0);
+            GL30.glBindVertexArray(prevInitVao);
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
 
             initialized = true;
@@ -524,11 +525,7 @@ public class DeferredHeadlightRenderer {
                         sl.range = lightRange;
                         sl.intensity = lightIndivIntensity;
                         sl.cookieType = (mode == 2) ? 1 : 0;
-                        if (vehicle == primaryVehicle && assignedShadowSlots < SHADOW_SLOTS) {
-                            sl.shadowSlot = assignedShadowSlots++;
-                        } else {
-                            sl.shadowSlot = -1;
-                        }
+                        sl.shadowSlot = -1;
                         activeSpotlights.add(sl);
                     }
                 }
@@ -719,9 +716,10 @@ public class DeferredHeadlightRenderer {
         RenderSystem.disableCull();
         RenderSystem.disableBlend();
 
+        int prevVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         GL30.glBindVertexArray(vao);
         GL11.glDrawArrays(GL11.GL_TRIANGLE_FAN, 0, 4);
-        GL30.glBindVertexArray(0);
+        GL30.glBindVertexArray(prevVao);
 
         // Restore active shader program
         GL20.glUseProgram(prevProgram);
