@@ -444,6 +444,19 @@ public class OdeVehicleBody {
                 this.powertrainSpec.revLimiterRpm = (float) (def.physics.redlineRpm + 250.0);
             }
 
+            if (def.physics.finalDrive > 0.5) {
+                this.powertrainSpec.differentialRatio = (float) def.physics.finalDrive;
+            }
+            if (def.physics.gearRatios != null && def.physics.gearRatios.length > 0) {
+                this.powertrainSpec.gearRatios = new float[def.physics.gearRatios.length];
+                for (int g = 0; g < def.physics.gearRatios.length; g++) {
+                    this.powertrainSpec.gearRatios[g] = (float) def.physics.gearRatios[g];
+                }
+            }
+            if (def.physics.reverseRatio > 0.5) {
+                this.powertrainSpec.reverseGearRatio = -(float) Math.abs(def.physics.reverseRatio);
+            }
+
             if (def.physics.drivetrain != null && !def.physics.drivetrain.isEmpty()) {
                 this.drivetrain = def.physics.drivetrain.toLowerCase(java.util.Locale.ROOT);
             }
@@ -467,8 +480,8 @@ public class OdeVehicleBody {
                 this.powertrainSpec.revLimiterRpm = (float) (ec.redlineRpm + 250.0);
             }
             if (ec.torqueNm > 50.0) this.powertrainSpec.maxTorqueNm = (float) ec.torqueNm;
-            this.powertrain.configureFromSpec(this.powertrainSpec);
         }
+        this.powertrain.configureFromSpec(this.powertrainSpec);
 
         // 2. Wheel positions & dynamic suspension mounts based on static sag
         if (def.wheels != null) {
@@ -944,7 +957,7 @@ public class OdeVehicleBody {
                 wheelStates[i].wheelInertia = isDriven ? effectiveDrivenInertia : wheelBaseInertia;
                 wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, wheelStates[i].wheelInertia);
                 wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
-                float freeDriveT = (isDriven && !isPopped) ? driveTorquePerWheel : 0.0f;
+                float freeDriveT = isDriven ? (isPopped ? driveTorquePerWheel * 0.70f : driveTorquePerWheel) : 0.0f;
                 float freeBrakeT = (handbrakeInput && !isFront) ? 4500.0f : (powertrain.isBraking ? 2500.0f : 0.0f);
                 BrushTireSolver.solveWheelStep(wheelStates[i], 0.0f, 0.0f, 0.0f, freeDriveT, freeBrakeT, 0.0f, dt, 1.0f);
                 wheelAngularVel[i] = wheelStates[i].angularVelocity;
@@ -991,8 +1004,8 @@ public class OdeVehicleBody {
             } else if (powertrain.isBraking) {
                 driveT = 0.0f;
                 brakeT = isFront ? 3500.0f : 2500.0f; // Front-biased service brakes
-            } else if (isDriven && !isPopped) {
-                driveT = driveTorquePerWheel;
+            } else if (isDriven) {
+                driveT = isPopped ? (driveTorquePerWheel * 0.70f) : driveTorquePerWheel;
                 brakeT = (Math.abs(throttleInput) < 0.01f) ? (isFront ? 35.0f : 65.0f) : 0.0f;
             } else {
                 driveT = 0.0f;
@@ -1044,6 +1057,16 @@ public class OdeVehicleBody {
 
             float fx = wheelStates[i].outForceLongitudinal;
             float fy = wheelStates[i].outForceLateral;
+
+            if (isPopped) {
+                // Честное сопротивление качению стального обода: 14% от нормальной нагрузки этого колеса
+                float effectiveNormalLoad = wheelNormalLoadFz[i];
+                float rimRollingDrag = effectiveNormalLoad * 0.14f;
+                float maxStopForce = Math.abs(vx) * (this.mass * 0.25f) / dt;
+                float finalRimDrag = -Math.signum(vx) * Math.min(rimRollingDrag, maxStopForce);
+                fx += finalRimDrag;
+            }
+
             wheelSlipRatio[i] = wheelStates[i].outCombinedSlipNorm;
             wheelAngularVel[i] = wheelStates[i].angularVelocity;
 

@@ -250,15 +250,20 @@ public class PowertrainSolver {
         float rate = (targetClamp < smoothedClutchClamp) ? clutchDisengageRate : engageRate;
         smoothedClutchClamp += (targetClamp - smoothedClutchClamp) * clamp(dt * rate, 0.0f, 1.0f);
 
+        // Clutch thermal fade: перегрев феродо (>200°C) временно снижает сцепление, но не убивает коробку
+        float clutchFade = 1.0f;
+        if (clutchTempCelsius > 200.0f) {
+            clutchFade = Math.max(0.40f, 1.0f - (clutchTempCelsius - 200.0f) / 250.0f);
+        }
         float conditionFactor = Math.max(0.35f, Math.min(1.0f, this.transmissionCondition / 75.0f));
-        float tCap = maxClutchTorqueNm * smoothedClutchClamp * conditionFactor;
+        float tCap = maxClutchTorqueNm * smoothedClutchClamp * clutchFade * conditionFactor;
 
         // 6. Честный двухрежимный автомат состояний (LOCKED 1-DOF / SLIP 2-DOF)
 
         // 1. Проверка условий принудительного размыкания LOCKED -> SLIP:
         if (isClutchLocked) {
             boolean stallRisk = (transSyncRpm < targetIdleRpm - 50.0f) && (userThrottle < 0.1f);
-            boolean torqueExceeded = Math.abs(netInternalEngineTorque) > tCap;
+            boolean torqueExceeded = Math.abs(netInternalEngineTorque) > (tCap * 1.5f);
             if (clutchPedalPressed || gear != prevGear || stallRisk || torqueExceeded || smoothedClutchClamp < 0.75f) {
                 isClutchLocked = false;
             }
@@ -275,68 +280,75 @@ public class PowertrainSolver {
             couplingFactor = 1.0f;
         } else {
             // РЕЖИМ 2-DOF (SLIP — ПРОБУКСОВКА ПРИ ТРОГАНИИ ИЛИ ПЕРЕКЛЮЧЕНИИ):
-            // Точный момент для достижения engineOmega == transOmega ровно за 1 подшаг dt:
-            float exactSyncTorque = netInternalEngineTorque + (engineInertia / dt) * deltaOmega;
+            // 1. Точный момент (Н*м), необходимый чтобы сравнять валы ровно за 1 подшаг dt без проскока (Overshoot):
+            float exactSyncTorque = (engineInertia / dt) * deltaOmega;
 
-            // Если корзина сцепления tCap способна выдать этот момент (и мы уже выше оборотов старта):
-            float minLockRpm = (Math.abs(gear) >= 2) ? targetIdleRpm : launchStartRpm;
-            if (!clutchPedalPressed && smoothedClutchClamp > 0.80f && transSyncRpm >= minLockRpm && Math.abs(exactSyncTorque) <= tCap) {
-                // Бесшовный физический захват в LOCKED с сохранением 100% импульса маховика!
-                lastClutchTorqueNm = exactSyncTorque;
-                engineOmega = transOmega;
-                currentRpm = engineOmega * RAD_S_TO_RPM;
-                isClutchLocked = true;
-                couplingFactor = 1.0f;
+            // 2. Трение сцепления никогда не может превысить exactSyncTorque!
+            // Это на 100% исключает провал оборотов мотора ниже transOmega (смену знака deltaOmega).
+            float transmittedTorque = clamp(exactSyncTorque, -tCap, tCap);
+
+            // 3. Условие честного замыкания без удара в 5100 Н*м:
+            if (!clutchPedalPressed && smoothedClutchClamp > 0.80f && transSyncRpm >= targetIdleRpm) {
+                if (Math.abs(exactSyncTorque) <= tCap) {
+                    isClutchLocked = true;
+                    couplingFactor = 1.0f;
+                    engineOmega = transOmega;
+                    currentRpm = engineOmega * RAD_S_TO_RPM;
+                    lastClutchTorqueNm = transmittedTorque; // <= tCap! Никаких скачков в 5100 Н*м!
+                } else {
+                    isClutchLocked = false;
+                    // Если водитель жмет газ (userThrottle > 0.05f), а мотор случайно оказался ниже КПП,
+                    // сцепление плавно подтягивает мотор вверх, но не тормозит колеса сильнее обычного торможения двигателем:
+                    float engineBrakingTorqueNm = (lastFrictionTorqueNm > 0.0f) ? lastFrictionTorqueNm : 50.0f;
+                    if (userThrottle > 0.05f && transmittedTorque < 0.0f) {
+                        transmittedTorque = Math.max(transmittedTorque, -engineBrakingTorqueNm);
+                    }
+                    lastClutchTorqueNm = transmittedTorque;
+                }
             } else {
-                // Честное скольжение (SLIP): момент Кулона ограничен сверху exactSyncTorque,
-                // чтобы маховик НИКОГДА не мог перелететь через скорость трансмиссии или отдать больше энергии, чем в нем запасено!
-                float coulombTorque = tCap * fastTanh(deltaOmega / clutchSlipBandRadS);
-                if (coulombTorque * exactSyncTorque > 0.0f && Math.abs(coulombTorque) > Math.abs(exactSyncTorque)) {
-                    lastClutchTorqueNm = exactSyncTorque;
-                } else {
-                    lastClutchTorqueNm = coulombTorque;
-                }
-
-                // Резерв момента при старте с места (только для 1-й и R, когда колеса еще медленнее launchStartRpm):
-                if (Math.abs(gear) <= 1 && transSyncRpm < launchStartRpm && userThrottle > 0.02f) {
-                    float reserve = clamp((currentRpm - targetIdleRpm) / (launchFullLockRpm - targetIdleRpm), 0.0f, 1.0f);
-                    float maxAllowable = Math.max(0.0f, netInternalEngineTorque * (0.25f + 0.75f * reserve));
-                    if (lastClutchTorqueNm > maxAllowable) {
-                        lastClutchTorqueNm = maxAllowable;
-                    }
-                }
-
-                float crankAccel = (netInternalEngineTorque - lastClutchTorqueNm) / engineInertia;
-                engineOmega += crankAccel * dt;
-
-                if (currentGear > 0 && !clutchPedalPressed && engineOmega < (targetIdleRpm * 0.45f) * RPM_TO_RAD_S) {
-                    this.isEngineStalled = true;
-                    this.isEngineOn = false;
-                    engineOmega = 0.0f;
-                } else {
-                    float minAliveOmega = (targetIdleRpm * 0.70f) * RPM_TO_RAD_S;
-                    if (engineOmega < minAliveOmega) {
-                        engineOmega = minAliveOmega;
-                    }
-                }
-                currentRpm = engineOmega * RAD_S_TO_RPM;
-
-                // При сжатом сцеплении отраженная инерция маховика I_e * G^2 честно передается на ведущие колеса,
-                // предотвращая паразитный срыв колес в букс на 2-й и высших передачах при переключении:
-                couplingFactor = smoothedClutchClamp;
+                isClutchLocked = false;
+                lastClutchTorqueNm = transmittedTorque;
             }
+
+            // Резерв момента при старте с места (только для 1-й и R, когда колеса еще медленнее launchStartRpm):
+            if (Math.abs(gear) <= 1 && transSyncRpm < launchStartRpm && userThrottle > 0.02f) {
+                float reserve = clamp((currentRpm - targetIdleRpm) / (launchFullLockRpm - targetIdleRpm), 0.0f, 1.0f);
+                float maxAllowable = Math.max(0.0f, netInternalEngineTorque * (0.25f + 0.75f * reserve));
+                if (lastClutchTorqueNm > maxAllowable) {
+                    lastClutchTorqueNm = maxAllowable;
+                }
+            }
+
+            float crankAccel = (netInternalEngineTorque - lastClutchTorqueNm) / engineInertia;
+            engineOmega += crankAccel * dt;
+
+            if (currentGear > 0 && !clutchPedalPressed && engineOmega < (targetIdleRpm * 0.45f) * RPM_TO_RAD_S) {
+                this.isEngineStalled = true;
+                this.isEngineOn = false;
+                engineOmega = 0.0f;
+            } else {
+                float minAliveOmega = (targetIdleRpm * 0.70f) * RPM_TO_RAD_S;
+                if (engineOmega < minAliveOmega) {
+                    engineOmega = minAliveOmega;
+                }
+            }
+            currentRpm = engineOmega * RAD_S_TO_RPM;
+
+            // При сжатом сцеплении отраженная инерция маховика I_e * G^2 честно передается на ведущие колеса:
+            couplingFactor = smoothedClutchClamp;
         }
         prevDeltaOmega = deltaOmega;
         prevGear = gear;
 
         // Тепловой баланс сцепления
         float slipHeatWatts = Math.abs(lastClutchTorqueNm) * Math.abs(deltaOmega);
-        float coolWatts = 4.5f * (clutchTempCelsius - 25.0f);
-        clutchTempCelsius += ((slipHeatWatts - coolWatts) / 2500.0f) * dt;
+        float coolWatts = 5.5f * (clutchTempCelsius - 25.0f);
+        clutchTempCelsius += ((slipHeatWatts - coolWatts) / 3500.0f) * dt;
         clutchTempCelsius = Math.max(25.0f, clutchTempCelsius);
         isClutchBurning = clutchTempCelsius > 220.0f;
-        if (clutchTempCelsius > 280.0f) {
-            transmissionCondition = Math.max(0.0f, transmissionCondition - dt * 0.5f);
+        // Механический износ шестерен КПП происходит только при экстремальном злоупотреблении (>360°C):
+        if (clutchTempCelsius > 360.0f) {
+            transmissionCondition = Math.max(0.0f, transmissionCondition - dt * 0.05f);
         }
 
         // 8. Выходной крутящий момент на ведущие колеса

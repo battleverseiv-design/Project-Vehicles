@@ -5,7 +5,7 @@
   "default_engine": "ford_302_v8",
   "default_wheel": "offroad_heavy_wheel",
   "default_dirt_level": 20.0,
-  "default_tire_condition": 35.0,
+  "default_tire_condition": 100.0,
   "models": {
     "chassis": "models/pickup_chassis.obj",
     "wheel": "models/pickup_wheel.obj",
