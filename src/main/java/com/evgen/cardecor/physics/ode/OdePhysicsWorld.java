@@ -2,6 +2,9 @@ package com.evgen.cardecor.physics.ode;
 
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -42,6 +45,7 @@ public class OdePhysicsWorld {
     private final List<OdeVehicleBody> vehicles = new ArrayList<>();
     private final List<DBox> blockBoxPool = new ArrayList<>();
     private int activeBlockBoxes = 0;
+    private final BlockPos.MutableBlockPos tempBlockPos = new BlockPos.MutableBlockPos();
 
     // Joint feedback pool for Impact Torque Cutoff (Zero-GC)
     private final List<DJoint.DJointFeedback> feedbackPool = new ArrayList<>(64);
@@ -175,7 +179,24 @@ public class OdePhysicsWorld {
 
                 // Zero-GC box traversal using forAllBoxes
                 shape.forAllBoxes((minBx, minBy, minBz, maxBx, maxBy, maxBz) -> {
-                    long key = BlockPos.asLong((int) Math.floor(minBx), (int) Math.floor(minBy), (int) Math.floor(minBz))
+                    int bx = (int) Math.floor(minBx);
+                    int by = (int) Math.floor(minBy);
+                    int bz = (int) Math.floor(minBz);
+
+                    if (v.traversal != null && v.traversal.foliageBulldozer) {
+                        tempBlockPos.set(bx, by, bz);
+                        BlockState state = level.getBlockState(tempBlockPos);
+                        if (state.is(BlockTags.LEAVES) || state.is(BlockTags.FLOWERS) || state.is(BlockTags.SAPLINGS)) {
+                            return;
+                        }
+                        if (state.getBlock() instanceof SnowLayerBlock) {
+                            if (state.hasProperty(SnowLayerBlock.LAYERS) && state.getValue(SnowLayerBlock.LAYERS) < 4) {
+                                return;
+                            }
+                        }
+                    }
+
+                    long key = BlockPos.asLong(bx, by, bz)
                             ^ ((long) (minBx * 100.0) + (long) (minBy * 1000.0) * 31L + (long) (minBz * 10000.0) * 961L);
                     if (!processedBlockKeys.add(key)) {
                         return; // Already added by another vehicle or overlapping bounds
@@ -215,6 +236,8 @@ public class OdePhysicsWorld {
     }
 
     private void nearCallback(Object data, DGeom g1, DGeom g2) {
+        if (!g1.isEnabled() || !g2.isEnabled()) return;
+
         // Only test Vehicle Chassis (1) vs Block (2) or Vehicle vs Vehicle (1 vs 1)
         if ((g1.getCategoryBits() & g2.getCollideBits()) == 0 && (g2.getCategoryBits() & g1.getCollideBits()) == 0) {
             return;
@@ -247,6 +270,40 @@ public class OdePhysicsWorld {
         boolean isVehicle1 = g1.getBody() != null && (data1 == OdeVehicleBody.GeomType.MAIN_HULL || data1 == OdeVehicleBody.GeomType.SKIDPLATE || data1 == OdeVehicleBody.GeomType.CABIN_ROOF);
         boolean isVehicle2 = g2.getBody() != null && (data2 == OdeVehicleBody.GeomType.MAIN_HULL || data2 == OdeVehicleBody.GeomType.SKIDPLATE || data2 == OdeVehicleBody.GeomType.CABIN_ROOF);
 
+        DGeom vehGeom = (g1.getCategoryBits() == 1) ? g1 : (g2.getCategoryBits() == 1 ? g2 : null);
+        DGeom blockGeom = (vehGeom == g1) ? g2 : g1;
+
+        OdeVehicleBody v = null;
+        if (vehGeom != null && vehGeom.getBody() != null && vehGeom.getBody().getData() instanceof OdeVehicleBody) {
+            v = (OdeVehicleBody) vehGeom.getBody().getData();
+        }
+
+        boolean isAdaptiveSki = false;
+        double skiNx = 0.0, skiNy = 1.0, skiNz = 0.0;
+        if (isBlockContact && v != null && vehGeom.getData() == OdeVehicleBody.GeomType.SKIDPLATE && blockGeom instanceof DBox) {
+            double wheelBottomY = v.body.getPosition().get1() - v.comHeight;
+            DVector3C boxPos = blockGeom.getPosition();
+            double blockHalfH = ((DBox) blockGeom).getLengths().get1() * 0.5;
+            double blockTopY = boxPos.get1() + blockHalfH;
+            double obstacleStepHeight = blockTopY - wheelBottomY;
+
+            if (obstacleStepHeight > 0.02 && obstacleStepHeight <= v.traversal.maxStepHeight) {
+                double toCarX = v.body.getPosition().get0() - boxPos.get0();
+                double toCarZ = v.body.getPosition().get2() - boxPos.get2();
+                double horizLen = Math.sqrt(toCarX * toCarX + toCarZ * toCarZ);
+                if (horizLen > 0.001) {
+                    skiNx = (toCarX / horizLen) * 0.40;
+                    skiNy = 0.916;
+                    skiNz = (toCarZ / horizLen) * 0.40;
+                } else {
+                    skiNx = 0.0;
+                    skiNy = 1.0;
+                    skiNz = 0.0;
+                }
+                isAdaptiveSki = true;
+            }
+        }
+
         for (int i = 0; i < numContacts; i++) {
             DContact contact = contactBuffer.get(i);
 
@@ -267,10 +324,17 @@ public class OdePhysicsWorld {
                 contact.surface.bounce_vel = 1.2;
             }
 
-            // High stiffness constraint: recovers 85% of penetration per 12.5ms sub-step
-            contact.surface.soft_erp = 0.85;
-            contact.surface.soft_cfm = 0.00001;
-            contact.surface.mu = contactMu;
+            if (isAdaptiveSki) {
+                double sign = (vehGeom == g2) ? 1.0 : -1.0;
+                contact.geom.normal.set(skiNx * sign, skiNy * sign, skiNz * sign);
+                contact.surface.mu = 0.0;
+                contact.surface.soft_erp = 0.50;
+                contact.surface.soft_cfm = 0.0001;
+            } else {
+                contact.surface.soft_erp = 0.85;
+                contact.surface.soft_cfm = 0.00001;
+                contact.surface.mu = contactMu;
+            }
 
             DJoint joint = OdeHelper.createContactJoint(world, contactGroup, contact);
             joint.attach(g1.getBody(), g2.getBody());
@@ -284,8 +348,8 @@ public class OdePhysicsWorld {
                 joint.setFeedback(fb);
                 activeImpactJoints.add(joint);
 
-                OdeVehicleBody v = isVehicle1 ? (OdeVehicleBody) g1.getBody().getData() : (OdeVehicleBody) g2.getBody().getData();
-                impactVehicles.add(v);
+                OdeVehicleBody impactV = isVehicle1 ? (OdeVehicleBody) g1.getBody().getData() : (OdeVehicleBody) g2.getBody().getData();
+                impactVehicles.add(impactV);
             }
         }
     }

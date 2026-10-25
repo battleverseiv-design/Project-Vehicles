@@ -19,6 +19,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import com.evgen.cardecor.physics.dynamics.TerrainTraversalSpec;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -128,6 +130,12 @@ public class OdeVehicleBody {
     private final float[][] wheelMountWorld = new float[4][3];
     private final Vector3f[] wheelFwdVec = new Vector3f[]{ new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f() };
     private final Vector3f[] wheelRightVec = new Vector3f[]{ new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f() };
+    public final TerrainTraversalSpec traversal = new TerrainTraversalSpec();
+    public final Vector3f[] wheelEffectiveFwd = new Vector3f[]{
+            new Vector3f(0f, 0f, -1f), new Vector3f(0f, 0f, -1f),
+            new Vector3f(0f, 0f, -1f), new Vector3f(0f, 0f, -1f)
+    };
+    private final BlockPos.MutableBlockPos mutableTraversalPos = new BlockPos.MutableBlockPos();
     public float prevFrontLateralForce = 0.0f;
     public final Vector3f[] wheelContactNormal = new Vector3f[]{
             new Vector3f(0.0f, 1.0f, 0.0f),
@@ -277,9 +285,10 @@ public class OdeVehicleBody {
 
     public void initCompoundGeometries(DSpace space, DBody body) {
         // 1. Нижний подрамник / бамперы (Skidplate)
-        // Нижняя грань строго на 0.16м от асфальта при клиренсе COM = 0.40м
+        // Клиренс подрамника: минимум 0.24м от земли для свободного хода подвески
         double skidHeight = 0.24;
-        double skidOffsetY = -0.08;
+        double skidplateBottom = Math.max(0.24, this.wheelRadius * 0.65);
+        double skidOffsetY = (skidplateBottom + skidHeight * 0.5) - this.comHeight;
         skidplateBox = OdeHelper.createBox(space, this.width * 0.86, skidHeight, this.length * 0.96);
         skidplateBox.setBody(body);
         skidplateBox.setOffsetPosition(0.0, skidOffsetY, 0.0);
@@ -315,7 +324,7 @@ public class OdeVehicleBody {
         if (body == null || skidplateBox == null || mainHullBox == null || cabinRoofBox == null) return;
 
         double skidHeight = 0.24;
-        double skidplateBottom = 0.16; // от уровня земли
+        double skidplateBottom = Math.max(0.24, this.wheelRadius * 0.65); // от уровня земли
         double skidOffsetY = (skidplateBottom + skidHeight * 0.5) - this.comHeight;
 
         double fullW = this.width;
@@ -554,6 +563,9 @@ public class OdeVehicleBody {
             prevPosition.set(currentPosition);
         }
 
+        if (def.traversal != null) {
+            this.traversal.copyFrom(def.traversal);
+        }
         updateCompoundGeometries(def);
         rebuildSuspensionSpecs();
     }
@@ -637,6 +649,7 @@ public class OdeVehicleBody {
 
         double closestHitDist = sweepDist;
         Direction hitNormal = null;
+        BlockPos closestHitPos = null;
 
         for (float[] offset : rayOffsets) {
             double ox = rot.get00() * offset[0] + rot.get01() * offset[1] + rot.get02() * offset[2];
@@ -650,7 +663,6 @@ public class OdeVehicleBody {
             Vec3 start = new Vec3(sx, sy, sz);
             Vec3 end = new Vec3(sx + fwdX * sweepDist, sy + fwdY * sweepDist, sz + fwdZ * sweepDist);
 
-            // TODO: заменить на VoxelShape.clip + переиспользуемый ClipContext
             BlockHitResult hit = level.clip(new ClipContext(start, end,
                     ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this.entityOwner));
 
@@ -659,19 +671,135 @@ public class OdeVehicleBody {
                 if (d < closestHitDist) {
                     closestHitDist = d;
                     hitNormal = hit.getDirection();
+                    closestHitPos = hit.getBlockPos();
                 }
             }
         }
 
         if (hitNormal != null && closestHitDist < sweepDist) {
-            double nx = hitNormal.getStepX();
-            double nz = hitNormal.getStepZ();
-            double vIntoNormal = -(linVel.get0() * nx + linVel.get2() * nz);
-            double allowedInto = Math.max(0.0, closestHitDist - 0.02) / dt;
+            boolean canClimb = false;
+            if (closestHitPos != null && this.traversal != null) {
+                double wheelBottomY = pos.get1() - this.comHeight;
+                double obstacleTopY = closestHitPos.getY() + 1.0;
+                double stepHeight = obstacleTopY - wheelBottomY;
+                if (stepHeight > 0.02 && stepHeight <= this.traversal.maxStepHeight) {
+                    mutableTraversalPos.set(closestHitPos.getX(), closestHitPos.getY() + 1, closestHitPos.getZ());
+                    if (level.getBlockState(mutableTraversalPos).getCollisionShape(level, mutableTraversalPos).isEmpty()) {
+                        canClimb = true;
+                    }
+                }
+            }
 
-            if (vIntoNormal > allowedInto) {
-                double deltaV = vIntoNormal - allowedInto;
-                body.setLinearVel(linVel.get0() + deltaV * nx, linVel.get1(), linVel.get2() + deltaV * nz);
+            if (!canClimb) {
+                double nx = hitNormal.getStepX();
+                double nz = hitNormal.getStepZ();
+                double vIntoNormal = -(linVel.get0() * nx + linVel.get2() * nz);
+                double allowedInto = Math.max(0.0, closestHitDist - 0.02) / dt;
+
+                if (vIntoNormal > allowedInto) {
+                    double deltaV = vIntoNormal - allowedInto;
+                    body.setLinearVel(linVel.get0() + deltaV * nx, linVel.get1(), linVel.get2() + deltaV * nz);
+                }
+            }
+        }
+    }
+
+    /**
+     * Быстрый воксельный луч для сканирования рельефа.
+     */
+    public float traceVoxelRay(Level level, double startX, double startY, double startZ, double dirX, double dirY, double dirZ, double maxDist) {
+        Vec3 start = new Vec3(startX, startY, startZ);
+        Vec3 end = new Vec3(startX + dirX * maxDist, startY + dirY * maxDist, startZ + dirZ * maxDist);
+        BlockHitResult hit = level.clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this.entityOwner));
+        if (hit.getType() == HitResult.Type.BLOCK && hit.getDirection() != Direction.DOWN) {
+            return (float) start.distanceTo(hit.getLocation());
+        }
+        return (float) maxDist;
+    }
+
+    /**
+     * Универсальный сканер ванильного рельефа с мультипликаторами проходимости (Zero-GC, 80 Гц).
+     * Позволяет машине с maxStepHeight = 1.05f плавно заезжать на полные блоки (1.0 м) ванильной генерации мира!
+     */
+    public void evaluateWheelWithTraversal(
+            Level level,
+            TerrainTraversalSpec traversal,
+            int wheelIdx,
+            boolean isFront,
+            float mountX, float mountY, float mountZ,
+            float upX, float upY, float upZ,
+            float fwdX, float fwdY, float fwdZ,
+            float maxRayDist,
+            float forwardSpeedMs) {
+
+        float lift = 0.45f;
+        float groundDist = traceVoxelRay(
+                level,
+                mountX + upX * lift, mountY + upY * lift, mountZ + upZ * lift,
+                -upX, -upY, -upZ,
+                maxRayDist + lift
+        ) - lift;
+
+        float wheelBottomY = mountY - Math.min(groundDist, maxRayDist);
+
+        // 2. Сканер ступенек перед колесом (Step-Finder Probe)
+        float moveSign = (forwardSpeedMs < -0.2f || (Math.abs(forwardSpeedMs) <= 0.2f && this.throttleInput < -0.05f)) ? -1.0f : 1.0f;
+        float probeDirX = fwdX * moveSign;
+        float probeDirZ = fwdZ * moveSign;
+
+        float lookAheadDist = this.wheelRadius + 0.35f;
+        float probeX = mountX + probeDirX * lookAheadDist;
+        float probeZ = mountZ + probeDirZ * lookAheadDist;
+
+        float probeStartY = wheelBottomY + traversal.maxStepHeight + 0.30f;
+        float probeMaxLen = traversal.maxStepHeight + 0.60f;
+
+        float stepClimbBias = 0.0f;
+        float stepVirtualCompression = 0.0f;
+
+        mutableTraversalPos.set(Mth.floor(probeX), Mth.floor(probeStartY + 0.20f), Mth.floor(probeZ));
+        boolean headRoomClear = level.getBlockState(mutableTraversalPos).getCollisionShape(level, mutableTraversalPos).isEmpty();
+
+        if (headRoomClear) {
+            float probeHit = traceVoxelRay(level, probeX, probeStartY, probeZ, 0.0, -1.0, 0.0, probeMaxLen);
+            if (probeHit < probeMaxLen) {
+                float obstacleTopY = probeStartY - probeHit;
+                float stepHeight = obstacleTopY - wheelBottomY;
+
+                if (stepHeight > 0.04f && stepHeight <= traversal.maxStepHeight) {
+                    float rampSlope = (stepHeight / lookAheadDist) * traversal.stepClimbAssist;
+                    stepClimbBias = Mth.clamp(rampSlope, 0.0f, 2.5f);
+
+                    float driveIntent = (moveSign > 0) ? Math.max(0.0f, this.throttleInput) : Math.max(0.0f, -this.throttleInput);
+                    if (driveIntent > 0.05f || Math.abs(forwardSpeedMs) > 0.3f) {
+                        stepVirtualCompression = Math.min(this.suspensionRestLength * 0.90f, stepHeight * 0.45f * traversal.suspensionStepBoost);
+                    }
+                }
+            }
+        }
+
+        // Помощь на крутых ванильных склонах (pitch > 8 градусов)
+        float pitchAngle = this.getPitch();
+        if (pitchAngle > 8.0f && moveSign > 0) {
+            stepClimbBias += (pitchAngle / 45.0f) * (traversal.slopeClimbBoost - 1.0f);
+        }
+
+        // Эффективный вектор тяги колеса (приподнимается на уступ)
+        if (stepClimbBias > 0.001f) {
+            float invLen = (float) (1.0 / Math.sqrt(1.0f + stepClimbBias * stepClimbBias));
+            this.wheelEffectiveFwd[wheelIdx].set(
+                    (fwdX + upX * stepClimbBias * moveSign) * invLen,
+                    (fwdY + upY * stepClimbBias * moveSign) * invLen,
+                    (fwdZ + upZ * stepClimbBias * moveSign) * invLen
+            );
+        } else {
+            this.wheelEffectiveFwd[wheelIdx].set(fwdX, fwdY, fwdZ);
+        }
+
+        // Применяем виртуальное сжатие к замеренным дистанциям подвески
+        if (stepVirtualCompression > 0.001f) {
+            for (int j = 0; j < tempProbeDistances.length; j++) {
+                tempProbeDistances[j] = Math.max(0.0, tempProbeDistances[j] - stepVirtualCompression);
             }
         }
     }
@@ -828,7 +956,7 @@ public class OdeVehicleBody {
                 wheelProbes[i] = probe;
             }
 
-            double rayUpOffset = 0.30;
+            double rayUpOffset = 0.45;
             double castDist = suspensionRestLength + spec.xDroop + wheelRadius;
             BlockHitResult bestHit = null;
 
@@ -864,6 +992,18 @@ public class OdeVehicleBody {
                     tempProbeDistances[j] = castDist;
                 }
             }
+
+            evaluateWheelWithTraversal(
+                    level,
+                    this.traversal,
+                    i,
+                    isFront,
+                    (float) wx, (float) wy, (float) wz,
+                    upX, upY, upZ,
+                    wf.x, wf.y, wf.z,
+                    (float) castDist,
+                    forwardSpeedMps
+            );
 
             // Wheel hub velocities in world space:
             float hubVx = tempLinVel.x + (tempAngVel.y * mz - tempAngVel.z * my);
@@ -929,6 +1069,10 @@ public class OdeVehicleBody {
                 double fSusp = spec.force(probe.x, probe.v, spec.mC, dt);
                 if (isPopped) {
                     fSusp *= 0.40;
+                }
+                float compRatio = (float) (probe.x / this.suspensionRestLength);
+                if (compRatio > 0.65f) {
+                    fSusp *= (1.0f + (compRatio - 0.65f) * 3.8f);
                 }
                 float maxWheelForce = (this.mass * 18.0f) * 1.5f;
                 fSusp = Mth.clamp((float) fSusp, 0.0f, maxWheelForce);
@@ -1008,7 +1152,7 @@ public class OdeVehicleBody {
             wheelStates[i].isClutchLocked = isDriven && powertrain.isClutchLocked;
             wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
 
-            Vector3f curWheelFwd = wheelFwdVec[i];
+            Vector3f curWheelFwd = this.wheelEffectiveFwd[i];
             Vector3f curWheelRight = wheelRightVec[i];
 
             // Contact patch position relative to COM:
@@ -1064,10 +1208,13 @@ public class OdeVehicleBody {
             float effectiveInvMass = (1.0f / this.mass) + Math.max(0.0f, angularDenominator);
             float effectiveMassLat = 1.0f / Math.max(1e-5f, effectiveInvMass);
 
-            // Surface friction coefficient
+            // Surface friction coefficient & offroad traversal modifiers
             SurfaceProfile surface = wheelSurface[i];
+            float offroadGrip = (surface != SurfaceProfile.ASPHALT) ? this.traversal.offroadGripMultiplier : 1.0f;
+            float offroadDrag = (surface != SurfaceProfile.ASPHALT) ? this.traversal.offroadDragMultiplier : 1.0f;
+
             float weatherFactor = wheelSurfaceWet[i] ? surface.rainGripFactor : 1.0f;
-            float surfaceMu = surface.muLatScale * weatherFactor;
+            float surfaceMu = surface.muLatScale * weatherFactor * offroadGrip;
             if (isFront) {
                 surfaceMu *= 0.96f; // Front-soft understeer bias (Kus > 0)
             }
@@ -1106,7 +1253,8 @@ public class OdeVehicleBody {
                 // Честное поколесное сопротивление качению шины по Кулону (с ограничением по импульсу массы)
                 float maxStopForce = Math.abs(vx) * (this.mass * 0.25f) / dt;
                 float smoothVelFactor = (float) Math.tanh(vx / 0.35f);
-                float rrForce = -smoothVelFactor * Math.min(wheelNormalLoadFz[i] * surface.rollingResistance, maxStopForce);
+                float effectiveRollRes = surface.rollingResistance * offroadDrag;
+                float rrForce = -smoothVelFactor * Math.min(wheelNormalLoadFz[i] * effectiveRollRes, maxStopForce);
                 fx += rrForce;
             }
 

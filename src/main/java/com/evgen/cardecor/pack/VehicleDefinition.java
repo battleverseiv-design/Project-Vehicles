@@ -35,6 +35,8 @@ public class VehicleDefinition {
     public TaillightConfig taillights = new TaillightConfig();
     public DurabilityConfig durability = new DurabilityConfig();
     public RammingConfig ramming = new RammingConfig();
+    @com.google.gson.annotations.SerializedName(value = "traversal", alternate = {"terrain_traversal", "terrainTraversal"})
+    public com.evgen.cardecor.physics.dynamics.TerrainTraversalSpec traversal = new com.evgen.cardecor.physics.dynamics.TerrainTraversalSpec();
     public List<AnimationDef> animations = new ArrayList<>();
 
     public static class AnimationDef {
