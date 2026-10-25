@@ -82,18 +82,24 @@ public class PowertrainSolver {
 
     public void configureFromSpec(PowertrainSpec spec) {
         if (spec == null) return;
-        this.targetIdleRpm = spec.minRpm;
-        this.redlineRpm = spec.maxRpm;
-        this.revLimiterRpm = spec.revLimiterRpm;
-        this.peakTorqueNm = spec.maxTorqueNm;
-        this.peakTorqueRpm = spec.peakTorqueRpm;
-        this.engineInertia = spec.engineInertia;
-        this.finalDriveRatio = spec.differentialRatio;
-        this.reverseGearRatio = spec.reverseGearRatio;
-        this.transmissionEfficiency = spec.transmissionEfficiency;
+        if (spec.minRpm > 300.0f) this.targetIdleRpm = spec.minRpm;
+        if (spec.maxRpm > 2000.0f) this.redlineRpm = spec.maxRpm;
+        this.revLimiterRpm = (spec.revLimiterRpm > this.redlineRpm) ? spec.revLimiterRpm : (this.redlineRpm + 300.0f);
+        if (spec.maxTorqueNm > 80.0f) {
+            this.peakTorqueNm = spec.maxTorqueNm;
+            this.idleTorqueMaxNm = spec.maxTorqueNm * 0.52f;
+            this.redlineTorqueNm = spec.maxTorqueNm * 0.82f;
+        }
+        if (spec.peakTorqueRpm > this.targetIdleRpm) this.peakTorqueRpm = spec.peakTorqueRpm;
+        if (spec.engineInertia > 0.05f) this.engineInertia = spec.engineInertia;
+        if (spec.differentialRatio > 0.5f) this.finalDriveRatio = spec.differentialRatio;
+        if (spec.reverseGearRatio != 0.0f) this.reverseGearRatio = -Math.abs(spec.reverseGearRatio);
+        if (spec.transmissionEfficiency > 0.5f) this.transmissionEfficiency = spec.transmissionEfficiency;
         if (spec.gearRatios != null && spec.gearRatios.length > 0) {
             for (int i = 0; i < Math.min(forwardGearRatios.length, spec.gearRatios.length); i++) {
-                forwardGearRatios[i] = spec.gearRatios[i];
+                if (spec.gearRatios[i] > 0.1f) {
+                    forwardGearRatios[i] = spec.gearRatios[i];
+                }
             }
         }
     }

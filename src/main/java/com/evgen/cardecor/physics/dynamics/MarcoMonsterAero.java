@@ -17,6 +17,7 @@ public class MarcoMonsterAero {
 
     public static final float AIR_DENSITY = 1.225f; // Sea-level air density rho (kg/m^3)
     public static final float GRAVITY = 18.5f;       // Effective Minecraft vehicle gravity (m/s^2)
+    public static final float STANDARD_GRAVITY = 9.80665f; // Standard Earth gravity for rolling resistance (m/s^2)
     public static final float PASSENGER_MASS_KG = 85.0f;
 
     /**
@@ -59,7 +60,7 @@ public class MarcoMonsterAero {
 
         // 3. Tire Rolling Resistance: F_rr = -C_rr * m * g * sign(v_fwd)
         if (body.groundedWheelsCount > 0 && Math.abs(fwdSpeed) > 0.05f) {
-            float normalWeightN = body.mass * GRAVITY;
+            float normalWeightN = body.mass * STANDARD_GRAVITY;
             float rrForce = -Math.signum(fwdSpeed) * groundRollResist * normalWeightN;
             body.forceAccum.fma(rrForce, localForward);
         }
@@ -100,7 +101,7 @@ public class MarcoMonsterAero {
 
         // 3. Rolling Resistance
         if (isGrounded && Math.abs(fwdSpeed) > 0.05f) {
-            float normalWeightN = totalMass * GRAVITY;
+            float normalWeightN = totalMass * STANDARD_GRAVITY;
             float rrForce = -Math.signum(fwdSpeed) * groundRollResist * normalWeightN;
             outForce.fma(rrForce, localForward);
         }

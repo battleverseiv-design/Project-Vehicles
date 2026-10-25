@@ -939,10 +939,6 @@ public class OdeVehicleBody {
             float cond = (i < tireCondition.length) ? tireCondition[i] : 100.0f;
             boolean isPopped = cond <= 0.0f;
 
-            float carInertiaPerDrivenWheel = (drivenCount > 0)
-                    ? ((this.mass * 0.45f) * (wheelRadius * wheelRadius)) / drivenCount
-                    : 0.0f;
-
             if (!wheelGrounded[i]) {
                 wheelSlipRatio[i] = 0.0f;
                 wheelStates[i].wheelInertia = isDriven ? effectiveDrivenInertia : wheelBaseInertia;
@@ -955,23 +951,12 @@ public class OdeVehicleBody {
                 continue;
             }
 
-            // На земле: при сцеплении (s < 0.70) колесо связано с приведенной массой кузова,
-            // при срыве в пробуксовку (s > 1.20) спадает до чистой инерции трансмиссии (честный букс/клатч-кик)
-            float tractionGrip = Mth.clamp(1.0f - (wheelStates[i].outCombinedSlipNorm - 0.70f) / 0.50f, 0.0f, 1.0f);
-            float effectiveInertia = isDriven
-                    ? (effectiveDrivenInertia + carInertiaPerDrivenWheel * tractionGrip)
-                    : (wheelBaseInertia + carInertiaPerDrivenWheel * 0.5f * tractionGrip);
+            // На земле: честная инерция колеса (без фейковой массы кузова carInertiaPerDrivenWheel)
+            float effectiveInertia = isDriven ? effectiveDrivenInertia : wheelBaseInertia;
             wheelStates[i].wheelInertia = effectiveInertia;
             wheelStates[i].invWheelInertia = 1.0f / Math.max(0.01f, effectiveInertia);
             wheelStates[i].isClutchLocked = isDriven && powertrain.isClutchLocked;
-
-            if (isDriven && powertrain.isClutchLocked && Math.abs(powertrain.getTotalGearRatio(powertrain.currentGear)) > 0.01f) {
-                float totalRatio = powertrain.getTotalGearRatio(powertrain.currentGear);
-                float syncWheelOmega = powertrain.getEngineOmega() / totalRatio;
-                wheelStates[i].maxAllowedOmega = (syncWheelOmega >= 0.0f) ? (syncWheelOmega * 1.08f) : (syncWheelOmega * 1.08f);
-            } else {
-                wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
-            }
+            wheelStates[i].maxAllowedOmega = Float.MAX_VALUE;
 
             Vector3f curWheelFwd = wheelFwdVec[i];
             Vector3f curWheelRight = wheelRightVec[i];
@@ -1014,6 +999,11 @@ public class OdeVehicleBody {
                 // Non-driven wheels rotate freely when accelerating or rolling;
                 // only slight coasting bearing resistance if completely off-throttle
                 brakeT = (Math.abs(throttleInput) < 0.01f && Math.abs(forwardSpeedMps) > 0.1f) ? 15.0f : 0.0f;
+            }
+
+            // Гарантируем отсутствие паразитного торможения на ВСЕХ 4 колесах при нажатом газе
+            if (Math.abs(throttleInput) > 0.01f && !handbrakeInput) {
+                brakeT = 0.0f;
             }
 
             // Effective inverse mass along lateral axis (from Bullet resolveSingleBilateral)
