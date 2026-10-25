@@ -115,7 +115,6 @@ public class OdePhysicsWorld {
             for (int i = 0; i < vehicles.size(); i++) {
                 OdeVehicleBody v = vehicles.get(i);
                 if (v.body != null && v.body.isEnabled()) {
-                    v.performBumperSweptCCDMulti(level, DT);
                     v.computeWheelForces(level, DT);
                 }
             }
@@ -308,12 +307,15 @@ public class OdePhysicsWorld {
             DContact contact = contactBuffer.get(i);
 
             if (isBlockContact) {
-                // Blocks: zero bounce to prevent erratic hopping on voxel edges
+                // Blocks: smooth sliding over voxel edges without catching
                 contact.surface.mode = OdeConstants.dContactSoftERP
                         | OdeConstants.dContactSoftCFM
                         | OdeConstants.dContactApprox1;
                 contact.surface.bounce = 0.0;
                 contact.surface.bounce_vel = 0.0;
+                contact.surface.soft_erp = 0.25;
+                contact.surface.soft_cfm = 0.015;
+                contact.surface.mu = 0.25;
             } else {
                 // Vehicle vs Vehicle: controlled elastic collision
                 contact.surface.mode = OdeConstants.dContactSoftERP
@@ -322,18 +324,17 @@ public class OdePhysicsWorld {
                         | OdeConstants.dContactBounce;
                 contact.surface.bounce = 0.15;
                 contact.surface.bounce_vel = 1.2;
+                contact.surface.soft_erp = 0.85;
+                contact.surface.soft_cfm = 0.00001;
+                contact.surface.mu = contactMu;
             }
 
             if (isAdaptiveSki) {
                 double sign = (vehGeom == g2) ? 1.0 : -1.0;
                 contact.geom.normal.set(skiNx * sign, skiNy * sign, skiNz * sign);
                 contact.surface.mu = 0.0;
-                contact.surface.soft_erp = 0.50;
-                contact.surface.soft_cfm = 0.0001;
-            } else {
-                contact.surface.soft_erp = 0.85;
-                contact.surface.soft_cfm = 0.00001;
-                contact.surface.mu = contactMu;
+                contact.surface.soft_erp = 0.35;
+                contact.surface.soft_cfm = 0.005;
             }
 
             DJoint joint = OdeHelper.createContactJoint(world, contactGroup, contact);
@@ -370,8 +371,8 @@ public class OdePhysicsWorld {
             // (forward speed > 3.5 m/s, opposing impact force > mass * 15 N, e.g. > 37,500 N for 2500 kg truck)
             DVector3C lv = vehicle.body.getLinearVel();
             double fwdSpeed = lv.get0() * vehicle.tempLocalFwd.x + lv.get1() * vehicle.tempLocalFwd.y + lv.get2() * vehicle.tempLocalFwd.z;
-            double impactThreshold = Math.max(25000.0, vehicle.mass * 15.0);
-            if (fwdSpeed > 3.5 && fLong < -impactThreshold) {
+            double impactThreshold = Math.max(50000.0, vehicle.mass * 40.0);
+            if (fwdSpeed > 6.0 && fLong < -impactThreshold) {
                 vehicle.impactCutoffActive = true;
                 vehicle.baseDriveForce = 0.0f;
             }
