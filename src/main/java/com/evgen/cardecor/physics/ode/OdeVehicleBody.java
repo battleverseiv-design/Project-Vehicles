@@ -159,17 +159,6 @@ public class OdeVehicleBody {
     public float currentSteerRad = 0.0f;
     public boolean handbrakeInput = false;
 
-    // Steering Column & Optimal Slip Envelope Parameters
-    public float maxSteerAngleRad = (float) Math.toRadians(36.0f);
-    public float steeringColumnInertia = 0.12f;
-    public float steeringDamping = 3.2f;
-    public float maxDriverSteerTorqueNm = 420.0f;
-    public float ackermannFactor = 0.85f;
-
-    public float currentSteerAngleRad = 0.0f;
-    public float currentSteerVelRadS = 0.0f;
-    public float leftWheelSteerRad = 0.0f;
-    public float rightWheelSteerRad = 0.0f;
 
     // Dynamic loading
     public int passengerCount = 0;
@@ -612,86 +601,29 @@ public class OdeVehicleBody {
         }
     }
 
-    /**
-     * Обновление динамики рулевого управления (80 Hz, Zero-GC).
-     *
-     * @param dt                шаг (0.0125f)
-     * @param steerInput        ввод с клавиатуры: -1.0 .. +1.0 (A / D)
-     * @param forwardSpeed      продольная скорость машины vx (м/с)
-     * @param lateralSpeedFront боковая скорость передней оси vy_front (м/с)
-     */
-    private void updateSteeringDynamics(float dt, float steerInput, float forwardSpeed, float lateralSpeedFront) {
-        float absVx = Math.abs(forwardSpeed);
-
-        // 1. Естественная скорость поворота руля без аркадной срезки:
-        float dynamicMaxAngle = maxSteerAngleRad;
-        if (absVx > 6.0f) {
-            float speedRatio = Math.min(1.0f, (absVx - 6.0f) / 28.0f);
-            dynamicMaxAngle = Mth.lerp(speedRatio, maxSteerAngleRad, (float) Math.toRadians(18.0f));
-        }
-
-        float targetAngle = steerInput * dynamicMaxAngle;
-
-        // 2. Суммарный выравнивающий момент от передних шин (SAT) с редукцией рулевой рейки (~16:1):
-        float satFromTires = (wheelStates[0].outAligningTorque + wheelStates[1].outAligningTorque) / 16.0f;
-
-        // 3. Плавный торсион ГУР и усилие рук водителя (без высокочастотного дребезга на месте):
-        float driverTorque = 0.0f;
-        if (Math.abs(steerInput) > 0.01f) {
-            float angleError = targetAngle - currentSteerAngleRad;
-            driverTorque = Mth.clamp(angleError * 650.0f - currentSteerVelRadS * 28.0f, -maxDriverSteerTorqueNm, maxDriverSteerTorqueNm);
-        } else {
-            // Возврат в ноль за счет реального SAT от шин + центровки кастера
-            float casterReturn = -currentSteerAngleRad * (35.0f + absVx * 8.0f);
-            driverTorque = casterReturn;
-        }
-
-        float totalColumnTorque = driverTorque + satFromTires - (steeringDamping * currentSteerVelRadS);
-        currentSteerVelRadS += (totalColumnTorque / steeringColumnInertia) * dt;
-        currentSteerVelRadS = Mth.clamp(currentSteerVelRadS, -6.5f, 6.5f); // Реальная скорость рук водителя
-        currentSteerAngleRad += currentSteerVelRadS * dt;
-
-        // Жесткие механические упоры рейки:
-        if (currentSteerAngleRad > maxSteerAngleRad) {
-            currentSteerAngleRad = maxSteerAngleRad;
-            if (currentSteerVelRadS > 0.0f) currentSteerVelRadS = 0.0f;
-        } else if (currentSteerAngleRad < -maxSteerAngleRad) {
-            currentSteerAngleRad = -maxSteerAngleRad;
-            if (currentSteerVelRadS < 0.0f) currentSteerVelRadS = 0.0f;
-        }
-
-        this.currentSteerRad = currentSteerAngleRad;
-        // Обязательно синхронизируем рулевой вал для анимации баранки в кабине:
-        this.steeringRack.steeringWheelAngle = currentSteerAngleRad * this.steeringRack.steeringRatio;
-
-        // 4. Геометрия Аккермана (внутреннее колесо поворачивает круче внешнего):
-        if (Math.abs(currentSteerAngleRad) < 1e-4f) {
-            leftWheelSteerRad = 0.0f;
-            rightWheelSteerRad = 0.0f;
-        } else {
-            float wheelbase = Math.max(1.0f, Math.abs(wheelMountsLocal[0].z - wheelMountsLocal[2].z));
-            float trackWidth = Math.max(0.8f, Math.abs(wheelMountsLocal[0].x - wheelMountsLocal[1].x));
-            float absSteer = Math.abs(currentSteerAngleRad);
-            float turnRadius = wheelbase / (float) Math.tan(absSteer);
-            float halfTrack = trackWidth * 0.5f * ackermannFactor;
-
-            float innerAngle = (float) Math.atan(wheelbase / Math.max(0.5f, turnRadius - halfTrack));
-            float outerAngle = (float) Math.atan(wheelbase / (turnRadius + halfTrack));
-
-            if (currentSteerAngleRad > 0.0f) {
-                leftWheelSteerRad = innerAngle;
-                rightWheelSteerRad = outerAngle;
-            } else {
-                leftWheelSteerRad = -outerAngle;
-                rightWheelSteerRad = -innerAngle;
-            }
-        }
-
-        steeringRack.leftWheelAngle = leftWheelSteerRad;
-        steeringRack.rightWheelAngle = rightWheelSteerRad;
-    }
-
     public float updateSteeringAngleRad(float rawSteerInput, float dt) {
+        float trackW = Math.max(0.8f, Math.abs(wheelMountsLocal[0].x - wheelMountsLocal[1].x));
+        float wheelB = Math.max(1.0f, Math.abs(wheelMountsLocal[0].z - wheelMountsLocal[2].z));
+
+        steeringRack.update(
+                rawSteerInput,
+                wheelStates[0].outForceLateral,
+                wheelStates[1].outForceLateral,
+                wheelStates[0].outSlipAngleTanNorm,
+                wheelStates[1].outSlipAngleTanNorm,
+                trackW,
+                wheelB,
+                dt
+        );
+
+        this.currentSteerRad = steeringRack.getCenterWheelAngle();
+
+        // Apply physical kingpin reaction torque to vehicle chassis
+        if (body != null) {
+            Vector3f rt = steeringRack.chassisReactionTorque;
+            body.addTorque(rt.x, rt.y, rt.z);
+        }
+
         return this.currentSteerRad;
     }
 
@@ -800,22 +732,11 @@ public class OdeVehicleBody {
 
         groundedWheelsCount = 0;
 
-        // Front axle lateral speed for Optimal Slip-Angle Limiter:
-        float fAxleLocalY = wheelMountsLocal[0].y;
-        float fAxleLocalZ = wheelMountsLocal[0].z;
-        float fAxleMx = (float) (rot.get01() * fAxleLocalY + rot.get02() * fAxleLocalZ);
-        float fAxleMy = (float) (rot.get11() * fAxleLocalY + rot.get12() * fAxleLocalZ);
-        float fAxleMz = (float) (rot.get21() * fAxleLocalY + rot.get22() * fAxleLocalZ);
-        float frontHubVx = tempLinVel.x + (tempAngVel.y * fAxleMz - tempAngVel.z * fAxleMy);
-        float frontHubVy = tempLinVel.y + (tempAngVel.z * fAxleMx - tempAngVel.x * fAxleMz);
-        float frontHubVz = tempLinVel.z + (tempAngVel.x * fAxleMy - tempAngVel.y * fAxleMx);
-        float lateralSpeedFront = frontHubVx * rightX + frontHubVy * rightY + frontHubVz * rightZ;
-
-        updateSteeringDynamics(dt, this.steerInput, forwardSpeedMps, lateralSpeedFront);
-        float cosSteerL = (float) Math.cos(leftWheelSteerRad);
-        float sinSteerL = (float) Math.sin(leftWheelSteerRad);
-        float cosSteerR = (float) Math.cos(rightWheelSteerRad);
-        float sinSteerR = (float) Math.sin(rightWheelSteerRad);
+        float steerAngleRad = updateSteeringAngleRad(this.steerInput, dt);
+        float cosSteerL = (float) Math.cos(steeringRack.leftWheelAngle);
+        float sinSteerL = (float) Math.sin(steeringRack.leftWheelAngle);
+        float cosSteerR = (float) Math.cos(steeringRack.rightWheelAngle);
+        float sinSteerR = (float) Math.sin(steeringRack.rightWheelAngle);
 
         float absSpeed = Math.abs(forwardSpeedMps);
         float moveSign = (forwardSpeedMps < -0.2f || (absSpeed <= 0.2f && this.throttleInput < -0.05f)) ? -1.0f : 1.0f;

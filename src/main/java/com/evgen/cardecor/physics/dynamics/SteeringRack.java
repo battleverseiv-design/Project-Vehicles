@@ -112,8 +112,8 @@ public final class SteeringRack {
 
             this.steeringWheelVelocity = (this.steeringWheelVelocity + (totalTorque / this.steeringInertia) * subDt) / dampingFactor;
 
-            // Физиологическое насыщение скорости вращения руля руками водителя (~4.5 рад/с ≈ 258°/с)
-            float maxSwVelocity = 4.5f;
+            // Физиологическое насыщение скорости вращения руля руками водителя (~8.0 рад/с ≈ 458°/с)
+            float maxSwVelocity = 8.0f;
             this.steeringWheelVelocity = Math.max(-maxSwVelocity, Math.min(maxSwVelocity, this.steeringWheelVelocity));
 
             this.steeringWheelAngle += this.steeringWheelVelocity * subDt;
