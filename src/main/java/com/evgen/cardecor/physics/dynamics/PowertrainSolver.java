@@ -40,7 +40,7 @@ public class PowertrainSolver {
     public float clutchDisengageRate = 25.0f;    // Скорость размыкания корзины [1/с]
 
     // --- 3. Параметры КПП и главной пары (Transmission Specs) ---
-    public final float[] forwardGearRatios = { 3.55f, 2.18f, 1.48f, 1.12f, 0.89f, 0.74f };
+    public float[] forwardGearRatios = { 3.55f, 2.18f, 1.48f, 1.12f, 0.89f, 0.74f };
     public float reverseGearRatio = -3.45f;      // Задняя передача (R)
     public float finalDriveRatio = 3.90f;        // Главная пара
     public float transmissionEfficiency = 0.92f; // КПД трансмиссии
@@ -91,6 +91,7 @@ public class PowertrainSolver {
             this.peakTorqueNm = spec.maxTorqueNm;
             this.idleTorqueMaxNm = spec.maxTorqueNm * 0.52f;
             this.redlineTorqueNm = spec.maxTorqueNm * 0.82f;
+            this.maxClutchTorqueNm = Math.max(520.0f, this.peakTorqueNm * 1.65f);
         }
         if (spec.peakTorqueRpm > this.targetIdleRpm) this.peakTorqueRpm = spec.peakTorqueRpm;
         if (spec.engineInertia > 0.05f) this.engineInertia = spec.engineInertia;
@@ -100,10 +101,9 @@ public class PowertrainSolver {
         if (spec.baseMassKg > 200.0f) this.vehicleMassKg = spec.baseMassKg;
         if (spec.wheelRadius > 0.1f) this.wheelRadiusM = spec.wheelRadius;
         if (spec.gearRatios != null && spec.gearRatios.length > 0) {
-            for (int i = 0; i < Math.min(forwardGearRatios.length, spec.gearRatios.length); i++) {
-                if (spec.gearRatios[i] > 0.1f) {
-                    forwardGearRatios[i] = spec.gearRatios[i];
-                }
+            this.forwardGearRatios = new float[spec.gearRatios.length];
+            for (int i = 0; i < spec.gearRatios.length; i++) {
+                this.forwardGearRatios[i] = (spec.gearRatios[i] > 0.05f) ? spec.gearRatios[i] : 1.0f;
             }
         }
     }
@@ -260,9 +260,9 @@ public class PowertrainSolver {
         // Clutch thermal fade: перегрев феродо (>200°C) временно снижает сцепление, но не убивает коробку
         float clutchFade = 1.0f;
         if (clutchTempCelsius > 200.0f) {
-            clutchFade = Math.max(0.40f, 1.0f - (clutchTempCelsius - 200.0f) / 250.0f);
+            clutchFade = Math.max(0.55f, 1.0f - (clutchTempCelsius - 200.0f) / 300.0f);
         }
-        float conditionFactor = Math.max(0.35f, Math.min(1.0f, this.transmissionCondition / 75.0f));
+        float conditionFactor = Math.max(0.50f, Math.min(1.0f, this.transmissionCondition / 75.0f));
         float tCap = maxClutchTorqueNm * smoothedClutchClamp * clutchFade * conditionFactor;
 
         // 6. Честный двухрежимный автомат состояний (LOCKED 1-DOF / SLIP 2-DOF)
@@ -301,26 +301,29 @@ public class PowertrainSolver {
             // Это на 100% исключает провал оборотов мотора ниже transOmega (смену знака deltaOmega).
             float transmittedTorque = clamp(exactSyncTorque, -tCap, tCap);
 
-            // 3. Условие честного замыкания без удара в 5100 Н*м:
+            // 3. Условие честного замыкания без проскока и ударов:
+            boolean closeToSync = Math.abs(deltaOmega) < (350.0f * RPM_TO_RAD_S);
+            boolean signCrossed = (prevDeltaOmega * deltaOmega <= 0.0f) && (smoothedClutchClamp > 0.80f);
             if (!clutchPedalPressed && smoothedClutchClamp > 0.80f && transSyncRpm >= targetIdleRpm) {
-                if (Math.abs(exactSyncTorque) <= tCap) {
+                if (Math.abs(exactSyncTorque) <= tCap || closeToSync || signCrossed) {
                     isClutchLocked = true;
                     couplingFactor = 1.0f;
                     engineOmega = transOmega;
                     currentRpm = engineOmega * RAD_S_TO_RPM;
-                    lastClutchTorqueNm = transmittedTorque; // <= tCap! Никаких скачков в 5100 Н*м!
+                    lastClutchTorqueNm = clamp(exactSyncTorque, -tCap, tCap);
                 } else {
                     isClutchLocked = false;
-                    // Если водитель жмет газ (userThrottle > 0.05f), а мотор случайно оказался ниже КПП,
-                    // сцепление плавно подтягивает мотор вверх, но не тормозит колеса сильнее обычного торможения двигателем:
-                    float engineBrakingTorqueNm = (lastFrictionTorqueNm > 0.0f) ? lastFrictionTorqueNm : 50.0f;
-                    if (userThrottle > 0.05f && transmittedTorque < 0.0f) {
-                        transmittedTorque = Math.max(transmittedTorque, -engineBrakingTorqueNm);
+                    // Если водитель жмет газ на передаче вперед, сцепление никогда не должно тормозить ведущие колеса:
+                    if (userThrottle > 0.05f && gear > 0 && transmittedTorque < 0.0f) {
+                        transmittedTorque = 0.0f;
                     }
                     lastClutchTorqueNm = transmittedTorque;
                 }
             } else {
                 isClutchLocked = false;
+                if (userThrottle > 0.05f && gear > 0 && transmittedTorque < 0.0f) {
+                    transmittedTorque = 0.0f;
+                }
                 lastClutchTorqueNm = transmittedTorque;
             }
 

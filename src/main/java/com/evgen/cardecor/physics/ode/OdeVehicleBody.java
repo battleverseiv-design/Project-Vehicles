@@ -481,6 +481,12 @@ public class OdeVehicleBody {
             }
             if (ec.torqueNm > 50.0) this.powertrainSpec.maxTorqueNm = (float) ec.torqueNm;
         }
+
+        if (def.wheels != null && def.wheels.radius > 0.05f) {
+            this.wheelRadius = (float) def.wheels.radius;
+            this.powertrainSpec.wheelRadius = this.wheelRadius;
+        }
+
         this.powertrain.configureFromSpec(this.powertrainSpec);
 
         // 2. Wheel positions & dynamic suspension mounts based on static sag
@@ -1065,10 +1071,11 @@ public class OdeVehicleBody {
                 float maxStopForce = Math.abs(vx) * (this.mass * 0.25f) / dt;
                 float finalRimDrag = -Math.signum(vx) * Math.min(rimRollingDrag, maxStopForce);
                 fx += finalRimDrag;
-            } else if (Math.abs(vx) > 0.05f) {
-                // Честное поколесное сопротивление качению шины от нормальной нагрузки и покрытия
-                float rollRes = surface.rollingResistance;
-                float rrForce = -Math.signum(vx) * (wheelNormalLoadFz[i] * rollRes);
+            } else if (Math.abs(vx) > 0.01f) {
+                // Честное поколесное сопротивление качению шины по Кулону (с ограничением по импульсу массы)
+                float maxStopForce = Math.abs(vx) * (this.mass * 0.25f) / dt;
+                float smoothVelFactor = (float) Math.tanh(vx / 0.35f);
+                float rrForce = -smoothVelFactor * Math.min(wheelNormalLoadFz[i] * surface.rollingResistance, maxStopForce);
                 fx += rrForce;
             }
 
