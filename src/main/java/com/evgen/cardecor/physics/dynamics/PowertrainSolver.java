@@ -301,7 +301,15 @@ public class PowertrainSolver {
             // Это на 100% исключает провал оборотов мотора ниже transOmega (смену знака deltaOmega).
             float transmittedTorque = clamp(exactSyncTorque, -tCap, tCap);
 
-            // 3. Условие честного замыкания без проскока и ударов:
+            // На передачах вперед крутящий момент от сцепления не должен тянуть колеса назад на месте/холостых
+            // (исключает паразитное вращение колес назад на холостом ходу):
+            if (gear > 0 && transmittedTorque < 0.0f && (transOmega >= 0.0f || userThrottle <= 0.05f)) {
+                transmittedTorque = 0.0f;
+            } else if (gear < 0 && transmittedTorque > 0.0f && (transOmega <= 0.0f || userThrottle <= 0.05f)) {
+                transmittedTorque = 0.0f;
+            }
+
+            // 3. Условие честного смыкания дисков без проскока и ударов:
             boolean closeToSync = Math.abs(deltaOmega) < (350.0f * RPM_TO_RAD_S);
             boolean signCrossed = (prevDeltaOmega * deltaOmega <= 0.0f) && (smoothedClutchClamp > 0.80f);
             if (!clutchPedalPressed && smoothedClutchClamp > 0.80f && transSyncRpm >= targetIdleRpm) {
@@ -310,34 +318,31 @@ public class PowertrainSolver {
                     couplingFactor = 1.0f;
                     engineOmega = transOmega;
                     currentRpm = engineOmega * RAD_S_TO_RPM;
-                    lastClutchTorqueNm = clamp(exactSyncTorque, -tCap, tCap);
+                    lastClutchTorqueNm = netInternalEngineTorque; // 1-DOF: крутящий момент мотора целиком переходит на трансмиссию
                 } else {
                     isClutchLocked = false;
-                    // Если водитель жмет газ на передаче вперед, сцепление никогда не должно тормозить ведущие колеса:
-                    if (userThrottle > 0.05f && gear > 0 && transmittedTorque < 0.0f) {
-                        transmittedTorque = 0.0f;
-                    }
                     lastClutchTorqueNm = transmittedTorque;
                 }
             } else {
                 isClutchLocked = false;
-                if (userThrottle > 0.05f && gear > 0 && transmittedTorque < 0.0f) {
-                    transmittedTorque = 0.0f;
-                }
                 lastClutchTorqueNm = transmittedTorque;
             }
 
-            // Резерв момента при старте с места (только для 1-й и R, когда колеса еще медленнее launchStartRpm):
-            if (Math.abs(gear) <= 1 && transSyncRpm < launchStartRpm && userThrottle > 0.02f) {
-                float reserve = clamp((currentRpm - targetIdleRpm) / (launchFullLockRpm - targetIdleRpm), 0.0f, 1.0f);
-                float maxAllowable = Math.max(0.0f, netInternalEngineTorque * (0.25f + 0.75f * reserve));
-                if (lastClutchTorqueNm > maxAllowable) {
-                    lastClutchTorqueNm = maxAllowable;
+            if (isClutchLocked) {
+                engineOmega = transOmega;
+            } else {
+                // Резерв момента при старте с места (только для 1-й и R, когда колеса еще медленнее launchStartRpm):
+                if (Math.abs(gear) <= 1 && transSyncRpm < launchStartRpm && userThrottle > 0.02f) {
+                    float reserve = clamp((currentRpm - targetIdleRpm) / (launchFullLockRpm - targetIdleRpm), 0.0f, 1.0f);
+                    float maxAllowable = Math.max(0.0f, netInternalEngineTorque * (0.25f + 0.75f * reserve));
+                    if (lastClutchTorqueNm > maxAllowable) {
+                        lastClutchTorqueNm = maxAllowable;
+                    }
                 }
-            }
 
-            float crankAccel = (netInternalEngineTorque - lastClutchTorqueNm) / engineInertia;
-            engineOmega += crankAccel * dt;
+                float crankAccel = (netInternalEngineTorque - lastClutchTorqueNm) / engineInertia;
+                engineOmega += crankAccel * dt;
+            }
 
             if (currentGear > 0 && !clutchPedalPressed && engineOmega < (targetIdleRpm * 0.45f) * RPM_TO_RAD_S) {
                 this.isEngineStalled = true;

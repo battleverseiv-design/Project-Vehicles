@@ -129,6 +129,13 @@ public class OdeVehicleBody {
     private final Vector3f[] wheelFwdVec = new Vector3f[]{ new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f() };
     private final Vector3f[] wheelRightVec = new Vector3f[]{ new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f() };
     public float prevFrontLateralForce = 0.0f;
+    public final Vector3f[] wheelContactNormal = new Vector3f[]{
+            new Vector3f(0.0f, 1.0f, 0.0f),
+            new Vector3f(0.0f, 1.0f, 0.0f),
+            new Vector3f(0.0f, 1.0f, 0.0f),
+            new Vector3f(0.0f, 1.0f, 0.0f)
+    };
+    public float weightDistributionFront = 0.52f;
 
     public final boolean[] wheelGrounded = new boolean[4];
     public final float[] wheelSuspensionLength = new float[]{0.38f, 0.38f, 0.38f, 0.38f};
@@ -191,15 +198,20 @@ public class OdeVehicleBody {
         double lMin = 0.08;
         double droopFrac = 0.25;
         double hDrop = 2.0 * this.suspensionRestLength;
+        double frontSharePerWheel = this.weightDistributionFront * 0.5;
+        double rearSharePerWheel = (1.0 - this.weightDistributionFront) * 0.5;
         for (int i = 0; i < 4; i++) {
             boolean isFront = (i < 2);
-            double share = isFront ? 0.26 : 0.24;
+            double share = isFront ? frontSharePerWheel : rearSharePerWheel;
             double zetaC = 0.30;
             double zetaR = 0.50;
+            // Масштабируем жесткость пружины пропорционально доле массы на ось:
+            // k_axle = k_base * (share / 0.25) => статический прогиб x_static одинаков спереди и сзади!
+            double kAxle = this.springStiffness * (share / 0.25);
             suspSpecs[i] = new SuspSpec(
                     this.mass,
                     share,
-                    this.springStiffness,
+                    kAxle,
                     zetaC,
                     zetaR,
                     this.suspensionRestLength,
@@ -245,9 +257,10 @@ public class OdeVehicleBody {
 
         initCompoundGeometries(space, body);
 
-        // ODE4J damping: 0.0020 allows free pitch dip on cliffs and smooth yaw rotation at 80 Hz
-        body.setLinearDamping(0.0020);
-        body.setAngularDamping(0.0030);
+        // ODE4J damping: Честная физика без искусственного линейного торможения!
+        // Сопротивление воздуха (Marco Monster) и трение качения шин моделируются отдельно.
+        body.setLinearDamping(0.0);
+        body.setAngularDamping(0.0005);
         body.setLinearDampingThreshold(0.02);
         body.setAngularDampingThreshold(0.01);
 
@@ -408,6 +421,9 @@ public class OdeVehicleBody {
 
         // 1. Process physics specification first to know mass, spring stiffness, and powertrain
         if (def.physics != null) {
+            if (def.physics.weightDistributionFront > 0.1 && def.physics.weightDistributionFront < 0.9) {
+                this.weightDistributionFront = (float) def.physics.weightDistributionFront;
+            }
             this.springStiffness = (float) Math.max(10000.0, def.physics.suspensionStiffness * 45000.0);
             this.springDamping = (float) Math.max(1000.0, def.physics.suspensionDamping * 4000.0);
 
@@ -829,6 +845,17 @@ public class OdeVehicleBody {
                 if (hitGround) {
                     double dFromStart = rayStart.distanceTo(hit.getLocation());
                     double dFromMount = Math.max(0.0, dFromStart - rayUpOffset);
+
+                    // Проекция наклонного луча на нормаль поверхности:
+                    // Устраняет ложное удлинение луча при дифференте (d = h / cos(theta)),
+                    // предотвращая прогрессирующее проваливание носа в землю.
+                    Direction hitDir = hit.getDirection();
+                    double nX = hitDir.getStepX(), nY = hitDir.getStepY(), nZ = hitDir.getStepZ();
+                    double dotN = upX * nX + upY * nY + upZ * nZ;
+                    if (dotN > 0.1) {
+                        dFromMount *= dotN;
+                    }
+
                     tempProbeDistances[j] = dFromMount;
                     if (bestHit == null || j == 0) {
                         bestHit = hit;
@@ -874,6 +901,7 @@ public class OdeVehicleBody {
                 contactNy = dir.getStepY();
                 contactNz = dir.getStepZ();
             }
+            wheelContactNormal[i].set(contactNx, contactNy, contactNz);
 
             wheelSurface[i] = surface;
             wheelSurfaceWet[i] = isWet;
@@ -941,7 +969,10 @@ public class OdeVehicleBody {
         for (int i = 0; i < 4; i++) {
             if (wheelGrounded[i] && wheelNormalLoadFz[i] > 0.001f) {
                 float fn = wheelNormalLoadFz[i];
-                float fsX = upX * fn, fsY = upY * fn, fsZ = upZ * fn;
+                // Реакция опоры прикладывается вдоль нормали контакта (а не наклонного кузова):
+                // Исключает паразитную продольную тягу и обеспечивает честное удержание кузова против силы тяжести.
+                Vector3f cN = wheelContactNormal[i];
+                float fsX = cN.x * fn, fsY = cN.y * fn, fsZ = cN.z * fn;
                 float mx = wheelMountWorld[i][0];
                 float my = wheelMountWorld[i][1];
                 float mz = wheelMountWorld[i][2];
@@ -1012,12 +1043,12 @@ public class OdeVehicleBody {
                 brakeT = isFront ? 3500.0f : 2500.0f; // Front-biased service brakes
             } else if (isDriven) {
                 driveT = isPopped ? (driveTorquePerWheel * 0.70f) : driveTorquePerWheel;
-                brakeT = (Math.abs(throttleInput) < 0.01f) ? (isFront ? 35.0f : 65.0f) : 0.0f;
+                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? (isFront ? 35.0f : 65.0f) : 150.0f) : 0.0f;
             } else {
                 driveT = 0.0f;
                 // Non-driven wheels rotate freely when accelerating or rolling;
-                // only slight coasting bearing resistance if completely off-throttle
-                brakeT = (Math.abs(throttleInput) < 0.01f && Math.abs(forwardSpeedMps) > 0.1f) ? 15.0f : 0.0f;
+                // when stopped (< 0.1 m/s) and off-throttle, apply holding brake to prevent creep
+                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? 15.0f : 120.0f) : 0.0f;
             }
 
             // Гарантируем отсутствие паразитного торможения на ВСЕХ 4 колесах при нажатом газе

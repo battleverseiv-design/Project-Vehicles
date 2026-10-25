@@ -67,21 +67,27 @@ public final class WheelProbe {
         }
         this.bestRayIndex = bestIdx;
 
-        // Geometric rate of rise limit on steps:
-        // When stationary or settling (|vH| < 0.5), allow rapid settling (2.5 m/s)
-        // When rolling, limit by wheel approach angle tan(theta_max) + axis speed
-        double baseUpRate = (Math.abs(vH) < 0.5) ? 2.5 : 0.4;
-        double up = Math.abs(vH) * tanMax + Math.abs(vAxis) + baseUpRate;
-        double xLim = Math.min(xRaw, this.x + up * dt);
+        // Ground contact threshold: wheel touches ground when compression is within droop range
+        this.grounded = (xRaw >= -s.xDroop);
 
-        // Free extension towards droop limit: critically damped harmonic follower
-        double w = s.wn;
-        double vf = this.v + (-w * w * (this.x + s.xDroop) - 2.0 * w * this.v) * dt;
-        double xf = this.x + vf * dt;
-
-        this.grounded = (xLim >= xf);
-        double xn = this.grounded ? xLim : xf;
-        this.v = (xn - this.x) / dt;
-        this.x = xn;
+        if (this.grounded) {
+            // Symmetric rate limiting: protects against 1-block voxel wall impulses,
+            // while allowing full realistic suspension travel speed (up to 3.5 m/s)
+            // without ratcheting downwards from contact micro-vibration.
+            double maxSpeed = (Math.abs(vH) < 0.5) ? 4.0 : Math.max(3.5, Math.abs(vH) * tanMax + Math.abs(vAxis) + 2.5);
+            double maxDelta = maxSpeed * dt;
+            double delta = xRaw - this.x;
+            delta = Math.max(-maxDelta, Math.min(maxDelta, delta));
+            double xn = this.x + delta;
+            this.v = (xn - this.x) / dt;
+            this.x = xn;
+        } else {
+            // Free extension towards droop limit in air: critically damped harmonic follower
+            double w = s.wn;
+            double vf = this.v + (-w * w * (this.x + s.xDroop) - 2.0 * w * this.v) * dt;
+            double xf = this.x + vf * dt;
+            this.v = vf;
+            this.x = Math.max(-s.xDroop, xf);
+        }
     }
 }
