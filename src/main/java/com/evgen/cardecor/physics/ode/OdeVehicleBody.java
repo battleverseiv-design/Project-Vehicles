@@ -159,6 +159,18 @@ public class OdeVehicleBody {
     public float currentSteerRad = 0.0f;
     public boolean handbrakeInput = false;
 
+    // Steering Column & Optimal Slip Envelope Parameters
+    public float maxSteerAngleRad = (float) Math.toRadians(36.0f);
+    public float steeringColumnInertia = 0.12f;
+    public float steeringDamping = 3.2f;
+    public float maxDriverSteerTorqueNm = 420.0f;
+    public float ackermannFactor = 0.85f;
+
+    public float currentSteerAngleRad = 0.0f;
+    public float currentSteerVelRadS = 0.0f;
+    public float leftWheelSteerRad = 0.0f;
+    public float rightWheelSteerRad = 0.0f;
+
     // Dynamic loading
     public int passengerCount = 0;
     public float dynamicCargoKg = 0.0f;
@@ -251,9 +263,7 @@ public class OdeVehicleBody {
         body.setData(this);
 
         recomputeInertia();
-        DMass m = OdeHelper.createMass();
-        m.setBoxTotal(this.mass, this.width, this.height, this.length);
-        body.setMass(m);
+        applyMassToBody();
 
         body.setPosition(startX, startY + comHeight, startZ);
 
@@ -392,9 +402,22 @@ public class OdeVehicleBody {
 
     public void recomputeInertia() {
         float ix = (1.0f / 12.0f) * this.mass * (height * height + length * length);
-        float iy = (1.0f / 12.0f) * this.mass * (width * width + length * length);
+        float iy = (1.0f / 12.0f) * this.mass * (width * width + length * length) * 0.78f;
         float iz = (1.0f / 12.0f) * this.mass * (width * width + height * height);
         this.invInertiaLocal.set(1.0f / Math.max(1.0f, ix), 1.0f / Math.max(1.0f, iy), 1.0f / Math.max(1.0f, iz));
+    }
+
+    private void applyMassToBody() {
+        if (body == null) return;
+        DMass m = OdeHelper.createMass();
+        m.setBoxTotal(this.mass, this.width, this.height, this.length);
+        m.setParameters(
+                m.getMass(),
+                m.getC().get0(), m.getC().get1(), m.getC().get2(),
+                m.getI().get00(), m.getI().get11() * 0.78, m.getI().get22(),
+                m.getI().get01(), m.getI().get02(), m.getI().get12()
+        );
+        body.setMass(m);
     }
 
     public void destroy() {
@@ -551,9 +574,7 @@ public class OdeVehicleBody {
 
         recomputeInertia();
         if (body != null) {
-            DMass m = OdeHelper.createMass();
-            m.setBoxTotal(this.mass, this.width, this.height, this.length);
-            body.setMass(m);
+            applyMassToBody();
 
             // Re-align ODE body COM height with true spawn elevation
             DVector3C curP = body.getPosition();
@@ -580,37 +601,95 @@ public class OdeVehicleBody {
             this.mass = newMass;
             recomputeInertia();
             if (body != null) {
-                DMass m = OdeHelper.createMass();
-                m.setBoxTotal(this.mass, this.width, this.height, this.length);
-                body.setMass(m);
+                applyMassToBody();
             }
             rebuildSuspensionSpecs();
         }
     }
 
-    public float updateSteeringAngleRad(float rawSteerInput, float dt) {
-        float trackW = Math.max(0.8f, Math.abs(wheelMountsLocal[0].x - wheelMountsLocal[1].x));
-        float wheelB = Math.max(1.0f, Math.abs(wheelMountsLocal[0].z - wheelMountsLocal[2].z));
+    /**
+     * Обновление динамики рулевого управления (80 Hz, Zero-GC).
+     *
+     * @param dt                шаг (0.0125f)
+     * @param steerInput        ввод с клавиатуры: -1.0 .. +1.0 (A / D)
+     * @param forwardSpeed      продольная скорость машины vx (м/с)
+     * @param lateralSpeedFront боковая скорость передней оси vy_front (м/с)
+     */
+    private void updateSteeringDynamics(float dt, float steerInput, float forwardSpeed, float lateralSpeedFront) {
+        float absVx = Math.abs(forwardSpeed);
 
-        steeringRack.update(
-                rawSteerInput,
-                wheelStates[0].outForceLateral,
-                wheelStates[1].outForceLateral,
-                wheelStates[0].outSlipAngleTanNorm,
-                wheelStates[1].outSlipAngleTanNorm,
-                trackW,
-                wheelB,
-                dt
-        );
-
-        this.currentSteerRad = steeringRack.getCenterWheelAngle();
-
-        // Apply physical kingpin reaction torque to vehicle chassis
-        if (body != null) {
-            Vector3f rt = steeringRack.chassisReactionTorque;
-            body.addTorque(rt.x, rt.y, rt.z);
+        // 1. Физический лимит целевого угла для клавиатуры (Optimal Slip Envelope):
+        // На скорости <= 4 м/с (14 км/ч) доступен полный выворот 36 градусов.
+        // На высокой скорости максимальный угол ограничивается углом текущего сноса передней оси + запас 9.5 градусов
+        // (чтобы клавиатура не перекручивала колеса в бессмысленный плуг на 40 градусов!):
+        float dynamicMaxAngle = maxSteerAngleRad;
+        if (absVx > 4.0f) {
+            float currentFrontSlipAngle = (float) Math.atan2(Math.abs(lateralSpeedFront), absVx);
+            float optimalPeakSlipRad = (float) Math.toRadians(9.5f); // Запас для агрессивного входа и контр-руления!
+            float physicalLimit = Mth.clamp(currentFrontSlipAngle + optimalPeakSlipRad, (float) Math.toRadians(7.0f), maxSteerAngleRad);
+            float blend = Mth.clamp((absVx - 4.0f) / 14.0f, 0.0f, 1.0f);
+            dynamicMaxAngle = Mth.lerp(blend, maxSteerAngleRad, physicalLimit);
         }
 
+        float targetAngle = steerInput * dynamicMaxAngle;
+
+        // 2. Суммарный выравнивающий момент от передних шин (SAT) с редукцией рулевой рейки (передаточное ~ 15:1):
+        float satFromTires = (wheelStates[0].outAligningTorque + wheelStates[1].outAligningTorque) / 15.0f;
+
+        // 3. Торсион ГУР и усилие рук водителя (PD-регулятор + физический возврат SAT):
+        float driverTorque = 0.0f;
+        if (Math.abs(steerInput) > 0.01f) {
+            float angleError = targetAngle - currentSteerAngleRad;
+            driverTorque = Mth.clamp(angleError * 1800.0f - currentSteerVelRadS * 45.0f, -maxDriverSteerTorqueNm, maxDriverSteerTorqueNm);
+        } else {
+            // Когда клавиши A/D отпущены — руль возвращается в 0 за счет реального SAT от шин + мягкой центровки кастера:
+            float casterReturn = -currentSteerAngleRad * (45.0f + absVx * 12.0f);
+            driverTorque = casterReturn;
+        }
+
+        float totalColumnTorque = driverTorque + satFromTires - (steeringDamping * currentSteerVelRadS);
+        currentSteerVelRadS += (totalColumnTorque / steeringColumnInertia) * dt;
+        currentSteerAngleRad += currentSteerVelRadS * dt;
+
+        // Жесткие механические упоры рейки:
+        if (currentSteerAngleRad > maxSteerAngleRad) {
+            currentSteerAngleRad = maxSteerAngleRad;
+            if (currentSteerVelRadS > 0.0f) currentSteerVelRadS = 0.0f;
+        } else if (currentSteerAngleRad < -maxSteerAngleRad) {
+            currentSteerAngleRad = -maxSteerAngleRad;
+            if (currentSteerVelRadS < 0.0f) currentSteerVelRadS = 0.0f;
+        }
+
+        this.currentSteerRad = currentSteerAngleRad;
+
+        // 4. Геометрия Аккермана (внутреннее колесо поворачивает круче внешнего):
+        if (Math.abs(currentSteerAngleRad) < 1e-4f) {
+            leftWheelSteerRad = 0.0f;
+            rightWheelSteerRad = 0.0f;
+        } else {
+            float wheelbase = Math.max(1.0f, Math.abs(wheelMountsLocal[0].z - wheelMountsLocal[2].z));
+            float trackWidth = Math.max(0.8f, Math.abs(wheelMountsLocal[0].x - wheelMountsLocal[1].x));
+            float absSteer = Math.abs(currentSteerAngleRad);
+            float turnRadius = wheelbase / (float) Math.tan(absSteer);
+            float halfTrack = trackWidth * 0.5f * ackermannFactor;
+
+            float innerAngle = (float) Math.atan(wheelbase / Math.max(0.5f, turnRadius - halfTrack));
+            float outerAngle = (float) Math.atan(wheelbase / (turnRadius + halfTrack));
+
+            if (currentSteerAngleRad > 0.0f) {
+                leftWheelSteerRad = innerAngle;
+                rightWheelSteerRad = outerAngle;
+            } else {
+                leftWheelSteerRad = -outerAngle;
+                rightWheelSteerRad = -innerAngle;
+            }
+        }
+
+        steeringRack.leftWheelAngle = leftWheelSteerRad;
+        steeringRack.rightWheelAngle = rightWheelSteerRad;
+    }
+
+    public float updateSteeringAngleRad(float rawSteerInput, float dt) {
         return this.currentSteerRad;
     }
 
@@ -718,11 +797,23 @@ public class OdeVehicleBody {
         }
 
         groundedWheelsCount = 0;
-        float steerAngleRad = updateSteeringAngleRad(this.steerInput, dt);
-        float cosSteerL = (float) Math.cos(steeringRack.leftWheelAngle);
-        float sinSteerL = (float) Math.sin(steeringRack.leftWheelAngle);
-        float cosSteerR = (float) Math.cos(steeringRack.rightWheelAngle);
-        float sinSteerR = (float) Math.sin(steeringRack.rightWheelAngle);
+
+        // Front axle lateral speed for Optimal Slip-Angle Limiter:
+        float fAxleLocalY = wheelMountsLocal[0].y;
+        float fAxleLocalZ = wheelMountsLocal[0].z;
+        float fAxleMx = (float) (rot.get01() * fAxleLocalY + rot.get02() * fAxleLocalZ);
+        float fAxleMy = (float) (rot.get11() * fAxleLocalY + rot.get12() * fAxleLocalZ);
+        float fAxleMz = (float) (rot.get21() * fAxleLocalY + rot.get22() * fAxleLocalZ);
+        float frontHubVx = tempLinVel.x + (tempAngVel.y * fAxleMz - tempAngVel.z * fAxleMy);
+        float frontHubVy = tempLinVel.y + (tempAngVel.z * fAxleMx - tempAngVel.x * fAxleMz);
+        float frontHubVz = tempLinVel.z + (tempAngVel.x * fAxleMy - tempAngVel.y * fAxleMx);
+        float lateralSpeedFront = frontHubVx * rightX + frontHubVy * rightY + frontHubVz * rightZ;
+
+        updateSteeringDynamics(dt, this.steerInput, forwardSpeedMps, lateralSpeedFront);
+        float cosSteerL = (float) Math.cos(leftWheelSteerRad);
+        float sinSteerL = (float) Math.sin(leftWheelSteerRad);
+        float cosSteerR = (float) Math.cos(rightWheelSteerRad);
+        float sinSteerR = (float) Math.sin(rightWheelSteerRad);
 
         float absSpeed = Math.abs(forwardSpeedMps);
         float moveSign = (forwardSpeedMps < -0.2f || (absSpeed <= 0.2f && this.throttleInput < -0.05f)) ? -1.0f : 1.0f;
@@ -784,6 +875,7 @@ public class OdeVehicleBody {
 
             float rampLift = stepUpProbes[i].updateRampLift(
                     level,
+                    this.traversal,
                     wx,
                     wheelBottomY,
                     wz,
@@ -807,7 +899,7 @@ public class OdeVehicleBody {
                 double rz = wz + wf.z * offsetFwd;
 
                 Vec3 rayStart = new Vec3(rx + upX * rayUp, ry + upY * rayUp, rz + upZ * rayUp);
-                Vec3 rayEnd = new Vec3(rayStart.x - upX * (castDist + rayUpOffset), rayStart.y - upY * (castDist + rayUpOffset), rayStart.z - upZ * (castDist + rayUpOffset));
+                Vec3 rayEnd = new Vec3(rayStart.x - upX * (castDist + rayUp), rayStart.y - upY * (castDist + rayUp), rayStart.z - upZ * (castDist + rayUp));
                 BlockHitResult hit = level.clip(new ClipContext(rayStart, rayEnd, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this.entityOwner));
 
                 int reroute = 2;
@@ -823,7 +915,7 @@ public class OdeVehicleBody {
                 boolean hitGround = (hit != null && hit.getType() == HitResult.Type.BLOCK && hit.getDirection() != Direction.DOWN);
                 if (hitGround) {
                     double dFromStart = rayStart.distanceTo(hit.getLocation());
-                    double dFromMount = Math.max(0.0, dFromStart - rayUpOffset);
+                    double dFromMount = Math.max(0.0, dFromStart - rayUp);
 
                     // Проекция наклонного луча на нормаль поверхности:
                     // Устраняет ложное удлинение луча при дифференте (d = h / cos(theta)),
@@ -919,8 +1011,10 @@ public class OdeVehicleBody {
                 wheelSpringForce[i] = (float) fSusp;
 
                 // Step-Up Assist: Мягкий накат вдоль виртуального пандуса на блок (до 1.05м)
-                if (rampLift > 0.02f) {
-                    float climbAssistForce = (this.mass * 9.81f * 0.32f) * (rampLift / WheelStepUpProbe.MAX_STEP_HEIGHT);
+                float maxStep = this.traversal != null ? this.traversal.maxStepHeight : WheelStepUpProbe.MAX_STEP_HEIGHT;
+                float assistRatio = this.traversal != null ? (this.traversal.stepClimbAssist * 0.24f) : 0.32f;
+                if (rampLift > 0.02f && assistRatio > 0.01f && maxStep > 0.15f) {
+                    float climbAssistForce = (this.mass * 9.81f * assistRatio) * (rampLift / maxStep);
                     body.addForce(
                             moveDirX * climbAssistForce * 0.4f,
                             climbAssistForce,

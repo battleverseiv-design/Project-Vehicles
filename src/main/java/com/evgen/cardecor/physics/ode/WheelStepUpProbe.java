@@ -1,5 +1,6 @@
 package com.evgen.cardecor.physics.ode;
 
+import com.evgen.cardecor.physics.dynamics.TerrainTraversalSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -12,11 +13,11 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * Zero-GC зонд ступенек (Virtual Ramp Step-Up Assist) для 80 Hz цикла.
- * Превращает вертикальную грань блока (до 1.05 м) в плавный наклонный пандус для луча подвески.
+ * Превращает вертикальную грань блока (до 1.5 м при соответствующей настройке) в плавный наклонный пандус для луча подвески.
  */
 public final class WheelStepUpProbe {
     public static final float MIN_TRIGGER_SPEED = 0.8f;   // Минимальная скорость начала наката (м/с)
-    public static final float MAX_STEP_HEIGHT   = 1.05f;  // Максимальная высота преодолеваемой ступеньки (м)
+    public static final float MAX_STEP_HEIGHT   = 1.05f;  // Дефолтная максимальная высота преодолеваемой ступеньки (м)
     public static final float PROBE_LOOKAHEAD   = 0.75f;  // Длина виртуального пандуса перед колесом (м)
     public static final float SMOOTH_UP_RATE    = 6.5f;   // Скорость подъема пандуса (1/с)
     public static final float SMOOTH_DOWN_RATE  = 4.0f;   // Скорость спада пандуса (1/с)
@@ -26,21 +27,43 @@ public final class WheelStepUpProbe {
     private int subTickCounter = 0;
     private final BlockPos.MutableBlockPos mPos = new BlockPos.MutableBlockPos();
 
-    /**
-     * Обновляет высоту виртуального пандуса для одного колеса.
-     *
-     * @param level          мир Minecraft
-     * @param wheelX         мировая X центра колеса
-     * @param wheelBottomY   мировая Y нижней точки колеса (wheelY - radius)
-     * @param wheelZ         мировая Z центра колеса
-     * @param dirX           нормализованный вектор движения колеса по X (с учетом знака скорости вперед/назад!)
-     * @param dirZ           нормализованный вектор движения колеса по Z
-     * @param absSpeedMps    модуль продольной скорости машины (м/с)
-     * @param hasDriveIntent нажата ли педаль газа в сторону движения (для старта в упор к блоку)
-     * @param wheelRadius    радиус колеса (м)
-     * @param dt             шаг физики (0.0125f)
-     * @return плавное смещение точки контакта подвески вверх [0.0 .. MAX_STEP_HEIGHT]
-     */
+    public float updateRampLift(
+            Level level,
+            TerrainTraversalSpec traversal,
+            double wheelX,
+            double wheelBottomY,
+            double wheelZ,
+            float dirX,
+            float dirZ,
+            float absSpeedMps,
+            boolean hasDriveIntent,
+            float wheelRadius,
+            float dt
+    ) {
+        float maxStep = (traversal != null) ? traversal.maxStepHeight : MAX_STEP_HEIGHT;
+        float climbAssist = (traversal != null) ? traversal.stepClimbAssist : 1.35f;
+
+        // Если проходимость отключена (спорткар / пузотерка с maxStep <= 0.15м или assist = 0):
+        if (maxStep <= 0.15f || climbAssist <= 0.01f || (absSpeedMps < MIN_TRIGGER_SPEED && !hasDriveIntent)) {
+            smoothedRampLift = Math.max(0.0f, smoothedRampLift - SMOOTH_DOWN_RATE * dt);
+            lastTargetLift = 0.0f;
+            return smoothedRampLift;
+        }
+
+        // Опрашиваем воксельную сетку раз в 2 подшага (40 Гц) для экономии CPU
+        if ((subTickCounter++ & 1) == 0) {
+            lastTargetLift = sampleVoxelRampHeight(level, wheelX, wheelBottomY, wheelZ, dirX, dirZ, wheelRadius, maxStep, climbAssist);
+        }
+
+        // Скорость подъема пандуса масштабируется от скорости машины, чтобы не было удара в подвеску
+        float dynamicUpRate = SMOOTH_UP_RATE * Mth.clamp(absSpeedMps * 0.25f, 0.7f, 2.2f);
+        float rate = (lastTargetLift > smoothedRampLift) ? dynamicUpRate : SMOOTH_DOWN_RATE;
+        smoothedRampLift += (lastTargetLift - smoothedRampLift) * Mth.clamp(rate * dt, 0.0f, 1.0f);
+
+        if (smoothedRampLift < 0.005f) smoothedRampLift = 0.0f;
+        return smoothedRampLift;
+    }
+
     public float updateRampLift(
             Level level,
             double wheelX,
@@ -53,24 +76,7 @@ public final class WheelStepUpProbe {
             float wheelRadius,
             float dt
     ) {
-        if (absSpeedMps < MIN_TRIGGER_SPEED && !hasDriveIntent) {
-            smoothedRampLift = Math.max(0.0f, smoothedRampLift - SMOOTH_DOWN_RATE * dt);
-            lastTargetLift = 0.0f;
-            return smoothedRampLift;
-        }
-
-        // Опрашиваем воксельную сетку раз в 2 подшага (40 Гц) для экономии CPU
-        if ((subTickCounter++ & 1) == 0) {
-            lastTargetLift = sampleVoxelRampHeight(level, wheelX, wheelBottomY, wheelZ, dirX, dirZ, wheelRadius);
-        }
-
-        // Скорость подъема пандуса масштабируется от скорости машины, чтобы не было удара в подвеску
-        float dynamicUpRate = SMOOTH_UP_RATE * Mth.clamp(absSpeedMps * 0.25f, 0.7f, 2.2f);
-        float rate = (lastTargetLift > smoothedRampLift) ? dynamicUpRate : SMOOTH_DOWN_RATE;
-        smoothedRampLift += (lastTargetLift - smoothedRampLift) * Mth.clamp(rate * dt, 0.0f, 1.0f);
-
-        if (smoothedRampLift < 0.005f) smoothedRampLift = 0.0f;
-        return smoothedRampLift;
+        return updateRampLift(level, null, wheelX, wheelBottomY, wheelZ, dirX, dirZ, absSpeedMps, hasDriveIntent, wheelRadius, dt);
     }
 
     private float sampleVoxelRampHeight(
@@ -80,9 +86,10 @@ public final class WheelStepUpProbe {
             double wz,
             float dirX,
             float dirZ,
-            float radius
+            float radius,
+            float maxStep,
+            float climbAssist
     ) {
-        // Проверяем 2 дистанции перед колесом (ближняя кромка и начало пандуса):
         float maxRampY = 0.0f;
         for (int step = 1; step <= 2; step++) {
             float dist = radius + (step == 1 ? 0.25f : PROBE_LOOKAHEAD);
@@ -102,15 +109,17 @@ public final class WheelStepUpProbe {
             double blockTopY = by + shape.max(Direction.Axis.Y);
             float stepDelta = (float) (blockTopY - bottomY);
 
-            // Если ступенька в пределах [0.05 .. MAX_STEP_HEIGHT]:
-            if (stepDelta > 0.05f && stepDelta <= MAX_STEP_HEIGHT) {
+            // Если ступенька в пределах [0.05 .. maxStep]:
+            if (stepDelta > 0.05f && stepDelta <= maxStep) {
                 // Проверяем, свободно ли пространство НАД ступенькой (чтобы не лезть в стену высотой 2+ блока!)
-                mPos.set(bx, by + 1, bz);
+                int checkHeightBlocks = (int) Math.ceil(stepDelta);
+                mPos.set(bx, by + checkHeightBlocks, bz);
                 BlockState aboveState = level.getBlockState(mPos);
                 if (!isBlockingWall(level, mPos, aboveState)) {
-                    // Чем ближе колесо к грани блока, тем выше поднимается виртуальный пандус (от 55% до 100% высоты)
+                    // Чем ближе колесо к грани блока, тем выше поднимается виртуальный пандус
                     float rampFactor = (step == 1) ? 1.0f : 0.55f;
-                    maxRampY = Math.max(maxRampY, stepDelta * rampFactor);
+                    float effectiveRamp = Math.min(stepDelta, stepDelta * rampFactor * Math.min(1.5f, climbAssist));
+                    maxRampY = Math.max(maxRampY, effectiveRamp);
                 }
             }
         }

@@ -307,15 +307,15 @@ public class OdePhysicsWorld {
             DContact contact = contactBuffer.get(i);
 
             if (isBlockContact) {
-                // Blocks: smooth sliding over voxel edges without catching
+                // Blocks: rigid collision response (no sinking or falling through)
                 contact.surface.mode = OdeConstants.dContactSoftERP
                         | OdeConstants.dContactSoftCFM
                         | OdeConstants.dContactApprox1;
                 contact.surface.bounce = 0.0;
                 contact.surface.bounce_vel = 0.0;
-                contact.surface.soft_erp = 0.25;
-                contact.surface.soft_cfm = 0.015;
-                contact.surface.mu = 0.25;
+                contact.surface.soft_erp = 0.85;
+                contact.surface.soft_cfm = 0.00001;
+                contact.surface.mu = contactMu;
             } else {
                 // Vehicle vs Vehicle: controlled elastic collision
                 contact.surface.mode = OdeConstants.dContactSoftERP
@@ -333,8 +333,8 @@ public class OdePhysicsWorld {
                 double sign = (vehGeom == g2) ? 1.0 : -1.0;
                 contact.geom.normal.set(skiNx * sign, skiNy * sign, skiNz * sign);
                 contact.surface.mu = 0.0;
-                contact.surface.soft_erp = 0.35;
-                contact.surface.soft_cfm = 0.005;
+                contact.surface.soft_erp = 0.80;
+                contact.surface.soft_cfm = 0.0001;
             }
 
             DJoint joint = OdeHelper.createContactJoint(world, contactGroup, contact);

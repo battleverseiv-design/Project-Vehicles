@@ -22,7 +22,9 @@ public final class BrushTireSolver {
 
     public static final float SLIP_RATIO_PEAK      = 0.12f;     // Пик продольного зацепа при 12% скольжения
 
-    public static final float SLIP_ANGLE_TAN_PEAK  = 0.16f;     // Пик бокового зацепа при tan(9.1 deg)
+    public static final float SLIP_ANGLE_TAN_PEAK  = 0.095f;    // Пик бокового зацепа при tan(5.4 deg)
+    public static final float PNEUMATIC_TRAIL_MAX  = 0.032f;    // 3.2 см пневматический снос
+    public static final float CASTER_TRAIL         = 0.018f;    // 1.8 см механический кастер
 
     public static final float SLIDE_FRICTION_RATIO = 0.74f;     // Отношение трения скольжения к пиковому (mu_slide / mu_peak)
 
@@ -466,25 +468,11 @@ public final class BrushTireSolver {
 
 
 
-        // Пневматический трейл и самовыравнивающий момент (Brush Model):
-
-        float thetaM = Math.abs(sy);
-
-        if (thetaM < 1.0f) {
-
-            float oneMinusTheta = 1.0f - thetaM;
-
-            float tp = 0.033f * (oneMinusTheta * oneMinusTheta * oneMinusTheta) / Math.max(1e-4f, 1.0f - thetaM + (1.0f / 3.0f) * thetaM * thetaM);
-
-            wheel.outAligningTorque = -fy * tp;
-
-        } else {
-
-            wheel.outAligningTorque = 0.0f;
-
-        }
-
-
+        // Пневматический трейл и самовыравнивающий момент вокруг оси поворота кулака:
+        // Пневматическое плечо спадает до нуля при срыве шины в скольжение (s -> 1.0)
+        float pneumaticTrail = PNEUMATIC_TRAIL_MAX * Math.max(0.0f, 1.0f - s * 0.85f);
+        float totalTrail = pneumaticTrail + CASTER_TRAIL;
+        wheel.outAligningTorque = -fy * totalTrail;
 
         // 5. ИНТЕГРАЦИЯ УГЛОВОЙ СКОРОСТИ КОЛЕСА (с реакцией дороги T_road = F_x * r)
 
