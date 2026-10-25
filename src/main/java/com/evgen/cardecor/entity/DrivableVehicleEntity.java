@@ -4376,7 +4376,7 @@ public class DrivableVehicleEntity extends Entity {
 
                 // Read authoritative 6-DOF state from ODE body
                 double nextX = this.odeBody.currentPosition.x;
-                double nextY = this.odeBody.currentPosition.y - this.odeBody.comHeight + 0.04;
+                double nextY = this.odeBody.currentPosition.y - this.odeBody.comHeight;
                 double nextZ = this.odeBody.currentPosition.z;
 
                 this.setPos(nextX, nextY, nextZ);

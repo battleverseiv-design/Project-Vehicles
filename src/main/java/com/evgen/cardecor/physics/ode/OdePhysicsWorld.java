@@ -287,7 +287,8 @@ public class OdePhysicsWorld {
             double blockTopY = boxPos.get1() + blockHalfH;
             double obstacleStepHeight = blockTopY - wheelBottomY;
 
-            if (obstacleStepHeight > 0.02 && obstacleStepHeight <= v.traversal.maxStepHeight) {
+            boolean hasDriveOrSpeed = Math.abs(v.getSpeedKmh()) > 0.5 || Math.abs(v.throttleInput) > 0.05f;
+            if (hasDriveOrSpeed && obstacleStepHeight > 0.02 && obstacleStepHeight <= v.traversal.maxStepHeight) {
                 double toCarX = v.body.getPosition().get0() - boxPos.get0();
                 double toCarZ = v.body.getPosition().get2() - boxPos.get2();
                 double horizLen = Math.sqrt(toCarX * toCarX + toCarZ * toCarZ);
@@ -330,8 +331,9 @@ public class OdePhysicsWorld {
                 contact.surface.mu = contactMu;
             }
 
-            if (isAdaptiveSki) {
-                double sign = (vehGeom == g2) ? 1.0 : -1.0;
+            boolean contactIsFloor = Math.abs(contact.geom.normal.get1()) > 0.55;
+            if (isAdaptiveSki && !contactIsFloor) {
+                double sign = (vehGeom == g1) ? 1.0 : -1.0;
                 contact.geom.normal.set(skiNx * sign, skiNy * sign, skiNz * sign);
                 contact.surface.mu = 0.0;
                 contact.surface.soft_erp = 0.80;
@@ -342,7 +344,7 @@ public class OdePhysicsWorld {
             joint.attach(g1.getBody(), g2.getBody());
 
             // Attach feedback to detect severe frontal collisions for Torque Cutoff (skip if traversing a climbable step)
-            if ((isVehicle1 || isVehicle2) && !isAdaptiveSki) {
+            if ((isVehicle1 || isVehicle2) && !(isAdaptiveSki && !contactIsFloor)) {
                 if (activeFeedbacks >= feedbackPool.size()) {
                     feedbackPool.add(new DJoint.DJointFeedback());
                 }

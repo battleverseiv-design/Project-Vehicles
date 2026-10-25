@@ -352,10 +352,10 @@ public class OdeVehicleBody {
             VehicleDefinition.CalibratedBounds cb = def.calibratedBounds;
             double scale = (def.scale > 0.05) ? def.scale : 1.0;
 
-            double hoodH = (cb.hoodHeight > 0.2 ? cb.hoodHeight : fullH * 0.55) / scale;
-            double roofH = (cb.roofHeight > 0.4 ? cb.roofHeight : fullH) / scale;
-            double cabinFrontZ = (cb.cabinFrontZ != 0 ? cb.cabinFrontZ : -fullL * 0.35) / scale;
-            double cabinRearZ = (cb.cabinRearZ != 0 ? cb.cabinRearZ : fullL * 0.15) / scale;
+            double hoodH = (cb.hoodHeight > 0.2 ? cb.hoodHeight : fullH * 0.55);
+            double roofH = (cb.roofHeight > 0.4 ? cb.roofHeight : fullH);
+            double cabinFrontZ = (cb.cabinFrontZ != 0 ? cb.cabinFrontZ : -fullL * 0.35);
+            double cabinRearZ = (cb.cabinRearZ != 0 ? cb.cabinRearZ : fullL * 0.15);
 
             if (cabinFrontZ > cabinRearZ) {
                 double temp = cabinFrontZ;
@@ -538,14 +538,19 @@ public class OdeVehicleBody {
 
         // 2. Wheel positions & dynamic suspension mounts based on static sag
         if (def.wheels != null) {
-            float[] fl = def.wheels.frontLeft;
-            float[] fr = def.wheels.frontRight;
-            float[] rl = def.wheels.rearLeft;
-            float[] rr = def.wheels.rearRight;
+            float[] flRaw = def.wheels.frontLeft;
+            float[] frRaw = def.wheels.frontRight;
+            float[] rlRaw = def.wheels.rearLeft;
+            float[] rrRaw = def.wheels.rearRight;
 
-            if (fl != null && rl != null) {
-                float midZ = (fl[2] + rl[2]) * 0.5f;
-                float midY = Math.max(0.40f, (fl[1] + rl[1]) * 0.5f + 0.22f);
+            if (flRaw != null && rlRaw != null && frRaw != null && rrRaw != null) {
+                float scale = (def.scale > 0.05f) ? (float) def.scale : 1.0f;
+                float flX = flRaw[0] * scale, flY = flRaw[1] * scale, flZ = flRaw[2] * scale;
+                float frX = frRaw[0] * scale, frY = frRaw[1] * scale, frZ = frRaw[2] * scale;
+                float rlX = rlRaw[0] * scale, rlY = rlRaw[1] * scale, rlZ = rlRaw[2] * scale;
+                float rrX = rrRaw[0] * scale, rrY = rrRaw[1] * scale, rrZ = rrRaw[2] * scale;
+                float midZ = (flZ + rlZ) * 0.5f;
+                float midY = Math.max(0.40f, (flY + rlY) * 0.5f + 0.22f);
                 this.comHeight = midY;
 
                 // Dynamic mount Y: strut top is located (L_rest - x_static) above the wheel axle center
@@ -553,13 +558,13 @@ public class OdeVehicleBody {
                 float xStaticFront = (quarterMass * 9.80665f) / Math.max(1000.0f, this.springStiffness);
                 float xStaticRear = (quarterMass * 9.80665f) / Math.max(1000.0f, this.springStiffness);
 
-                float mountYFront = (fl[1] - this.comHeight) + (this.suspensionRestLength - xStaticFront);
-                float mountYRear = (rl[1] - this.comHeight) + (this.suspensionRestLength - xStaticRear);
+                float mountYFront = (flY - this.comHeight) + (this.suspensionRestLength - xStaticFront);
+                float mountYRear = (rlY - this.comHeight) + (this.suspensionRestLength - xStaticRear);
 
-                wheelMountsLocal[0].set(fl[0], mountYFront, fl[2] - midZ);
-                wheelMountsLocal[1].set(fr[0], mountYFront, fr[2] - midZ);
-                wheelMountsLocal[2].set(rl[0], mountYRear, rl[2] - midZ);
-                wheelMountsLocal[3].set(rr[0], mountYRear, rr[2] - midZ);
+                wheelMountsLocal[0].set(flX, mountYFront, flZ - midZ);
+                wheelMountsLocal[1].set(frX, mountYFront, frZ - midZ);
+                wheelMountsLocal[2].set(rlX, mountYRear, rlZ - midZ);
+                wheelMountsLocal[3].set(rrX, mountYRear, rrZ - midZ);
             }
 
             if (def.wheels.radius > 0.1f) {
