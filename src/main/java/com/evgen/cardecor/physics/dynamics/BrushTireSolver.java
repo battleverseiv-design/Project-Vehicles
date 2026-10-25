@@ -22,7 +22,7 @@ public final class BrushTireSolver {
 
     public static final float SLIP_RATIO_PEAK      = 0.12f;     // Пик продольного зацепа при 12% скольжения
 
-    public static final float SLIP_ANGLE_TAN_PEAK  = 0.095f;    // Пик бокового зацепа при tan(5.4 deg)
+    public static final float SLIP_ANGLE_TAN_PEAK  = 0.135f;    // Сбалансированный пик бокового зацепа при tan(7.7 deg)
     public static final float PNEUMATIC_TRAIL_MAX  = 0.032f;    // 3.2 см пневматический снос
     public static final float CASTER_TRAIL         = 0.018f;    // 1.8 см механический кастер
 

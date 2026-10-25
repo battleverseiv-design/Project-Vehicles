@@ -91,35 +91,37 @@ public final class WheelStepUpProbe {
             float climbAssist
     ) {
         float maxRampY = 0.0f;
+        int baseBy = Mth.floor(bottomY);
+        int maxBlocksUp = (int) Math.ceil(maxStep) + 1;
+
         for (int step = 1; step <= 2; step++) {
             float dist = radius + (step == 1 ? 0.25f : PROBE_LOOKAHEAD);
             double checkX = wx + dirX * dist;
             double checkZ = wz + dirZ * dist;
             int bx = Mth.floor(checkX);
-            int by = Mth.floor(bottomY + 0.08);
             int bz = Mth.floor(checkZ);
 
-            mPos.set(bx, by, bz);
-            BlockState state = level.getBlockState(mPos);
-            if (!isClimbableSolid(level, mPos, state)) continue;
+            for (int dy = 0; dy <= maxBlocksUp; dy++) {
+                int by = baseBy + dy;
+                mPos.set(bx, by, bz);
+                BlockState state = level.getBlockState(mPos);
+                if (!isClimbableSolid(level, mPos, state)) continue;
 
-            VoxelShape shape = state.getCollisionShape(level, mPos);
-            if (shape.isEmpty()) continue;
+                VoxelShape shape = state.getCollisionShape(level, mPos);
+                if (shape.isEmpty()) continue;
 
-            double blockTopY = by + shape.max(Direction.Axis.Y);
-            float stepDelta = (float) (blockTopY - bottomY);
+                double blockTopY = by + shape.max(Direction.Axis.Y);
+                float stepDelta = (float) (blockTopY - bottomY);
 
-            // Если ступенька в пределах [0.05 .. maxStep]:
-            if (stepDelta > 0.05f && stepDelta <= maxStep) {
-                // Проверяем, свободно ли пространство НАД ступенькой (чтобы не лезть в стену высотой 2+ блока!)
-                int checkHeightBlocks = (int) Math.ceil(stepDelta);
-                mPos.set(bx, by + checkHeightBlocks, bz);
-                BlockState aboveState = level.getBlockState(mPos);
-                if (!isBlockingWall(level, mPos, aboveState)) {
-                    // Чем ближе колесо к грани блока, тем выше поднимается виртуальный пандус
-                    float rampFactor = (step == 1) ? 1.0f : 0.55f;
-                    float effectiveRamp = Math.min(stepDelta, stepDelta * rampFactor * Math.min(1.5f, climbAssist));
-                    maxRampY = Math.max(maxRampY, effectiveRamp);
+                if (stepDelta > 0.05f && stepDelta <= maxStep) {
+                    int checkHeightBlocks = (int) Math.ceil(stepDelta);
+                    mPos.set(bx, by + checkHeightBlocks, bz);
+                    BlockState aboveState = level.getBlockState(mPos);
+                    if (!isBlockingWall(level, mPos, aboveState)) {
+                        float rampFactor = (step == 1) ? 1.0f : 0.55f;
+                        float effectiveRamp = Math.min(stepDelta, stepDelta * rampFactor * Math.min(1.5f, climbAssist));
+                        maxRampY = Math.max(maxRampY, effectiveRamp);
+                    }
                 }
             }
         }

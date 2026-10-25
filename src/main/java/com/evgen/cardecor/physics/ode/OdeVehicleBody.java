@@ -618,37 +618,32 @@ public class OdeVehicleBody {
     private void updateSteeringDynamics(float dt, float steerInput, float forwardSpeed, float lateralSpeedFront) {
         float absVx = Math.abs(forwardSpeed);
 
-        // 1. Физический лимит целевого угла для клавиатуры (Optimal Slip Envelope):
-        // На скорости <= 4 м/с (14 км/ч) доступен полный выворот 36 градусов.
-        // На высокой скорости максимальный угол ограничивается углом текущего сноса передней оси + запас 9.5 градусов
-        // (чтобы клавиатура не перекручивала колеса в бессмысленный плуг на 40 градусов!):
+        // 1. Естественная скорость поворота руля без аркадной срезки:
         float dynamicMaxAngle = maxSteerAngleRad;
-        if (absVx > 4.0f) {
-            float currentFrontSlipAngle = (float) Math.atan2(Math.abs(lateralSpeedFront), absVx);
-            float optimalPeakSlipRad = (float) Math.toRadians(9.5f); // Запас для агрессивного входа и контр-руления!
-            float physicalLimit = Mth.clamp(currentFrontSlipAngle + optimalPeakSlipRad, (float) Math.toRadians(7.0f), maxSteerAngleRad);
-            float blend = Mth.clamp((absVx - 4.0f) / 14.0f, 0.0f, 1.0f);
-            dynamicMaxAngle = Mth.lerp(blend, maxSteerAngleRad, physicalLimit);
+        if (absVx > 6.0f) {
+            float speedRatio = Math.min(1.0f, (absVx - 6.0f) / 28.0f);
+            dynamicMaxAngle = Mth.lerp(speedRatio, maxSteerAngleRad, (float) Math.toRadians(18.0f));
         }
 
         float targetAngle = steerInput * dynamicMaxAngle;
 
-        // 2. Суммарный выравнивающий момент от передних шин (SAT) с редукцией рулевой рейки (передаточное ~ 15:1):
-        float satFromTires = (wheelStates[0].outAligningTorque + wheelStates[1].outAligningTorque) / 15.0f;
+        // 2. Суммарный выравнивающий момент от передних шин (SAT) с редукцией рулевой рейки (~16:1):
+        float satFromTires = (wheelStates[0].outAligningTorque + wheelStates[1].outAligningTorque) / 16.0f;
 
-        // 3. Торсион ГУР и усилие рук водителя (PD-регулятор + физический возврат SAT):
+        // 3. Плавный торсион ГУР и усилие рук водителя (без высокочастотного дребезга на месте):
         float driverTorque = 0.0f;
         if (Math.abs(steerInput) > 0.01f) {
             float angleError = targetAngle - currentSteerAngleRad;
-            driverTorque = Mth.clamp(angleError * 1800.0f - currentSteerVelRadS * 45.0f, -maxDriverSteerTorqueNm, maxDriverSteerTorqueNm);
+            driverTorque = Mth.clamp(angleError * 650.0f - currentSteerVelRadS * 28.0f, -maxDriverSteerTorqueNm, maxDriverSteerTorqueNm);
         } else {
-            // Когда клавиши A/D отпущены — руль возвращается в 0 за счет реального SAT от шин + мягкой центровки кастера:
-            float casterReturn = -currentSteerAngleRad * (45.0f + absVx * 12.0f);
+            // Возврат в ноль за счет реального SAT от шин + центровки кастера
+            float casterReturn = -currentSteerAngleRad * (35.0f + absVx * 8.0f);
             driverTorque = casterReturn;
         }
 
         float totalColumnTorque = driverTorque + satFromTires - (steeringDamping * currentSteerVelRadS);
         currentSteerVelRadS += (totalColumnTorque / steeringColumnInertia) * dt;
+        currentSteerVelRadS = Mth.clamp(currentSteerVelRadS, -6.5f, 6.5f); // Реальная скорость рук водителя
         currentSteerAngleRad += currentSteerVelRadS * dt;
 
         // Жесткие механические упоры рейки:
@@ -661,6 +656,8 @@ public class OdeVehicleBody {
         }
 
         this.currentSteerRad = currentSteerAngleRad;
+        // Обязательно синхронизируем рулевой вал для анимации баранки в кабине:
+        this.steeringRack.steeringWheelAngle = currentSteerAngleRad * this.steeringRack.steeringRatio;
 
         // 4. Геометрия Аккермана (внутреннее колесо поворачивает круче внешнего):
         if (Math.abs(currentSteerAngleRad) < 1e-4f) {

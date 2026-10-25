@@ -206,9 +206,17 @@ public class DrivablePackVehicleRenderer extends EntityRenderer<DrivablePackVehi
         poseStack.mulPose(smoothQuat);
         poseStack.translate(0.0F, -comY, 0.0F);
 
-        // World lighting: use packedLight directly with safety floor, avoiding CPU level light queries
-        int blockLight = Math.max(packedLight & 0xFFFF, 12);
-        int skyLight   = Math.max((packedLight >> 16) & 0xFFFF, 12);
+        // World lighting: sample light safely from hood/roof level so the car never turns black when parked on ground
+        int rawBlock = packedLight & 0xFFFF;
+        int rawSky   = (packedLight >> 16) & 0xFFFF;
+        if (rawBlock < 32 && rawSky < 32) {
+            net.minecraft.core.BlockPos samplePos = net.minecraft.core.BlockPos.containing(entity.getX(), entity.getY() + 0.8, entity.getZ());
+            int sampled = net.minecraft.client.renderer.LevelRenderer.getLightColor(entity.level(), samplePos);
+            rawBlock = Math.max(rawBlock, sampled & 0xFFFF);
+            rawSky   = Math.max(rawSky, (sampled >> 16) & 0xFFFF);
+        }
+        int blockLight = Math.max(rawBlock, 64);
+        int skyLight   = Math.max(rawSky, 64);
         int safePackedLight = (skyLight << 16) | blockLight;
 
         float scale = def.scale;

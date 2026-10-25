@@ -279,7 +279,8 @@ public class OdePhysicsWorld {
 
         boolean isAdaptiveSki = false;
         double skiNx = 0.0, skiNy = 1.0, skiNz = 0.0;
-        if (isBlockContact && v != null && vehGeom.getData() == OdeVehicleBody.GeomType.SKIDPLATE && blockGeom instanceof DBox) {
+        boolean isVehHull = (vehGeom != null && (vehGeom.getData() == OdeVehicleBody.GeomType.SKIDPLATE || vehGeom.getData() == OdeVehicleBody.GeomType.MAIN_HULL));
+        if (isBlockContact && v != null && isVehHull && blockGeom instanceof DBox) {
             double wheelBottomY = v.body.getPosition().get1() - v.comHeight;
             DVector3C boxPos = blockGeom.getPosition();
             double blockHalfH = ((DBox) blockGeom).getLengths().get1() * 0.5;
@@ -340,8 +341,8 @@ public class OdePhysicsWorld {
             DJoint joint = OdeHelper.createContactJoint(world, contactGroup, contact);
             joint.attach(g1.getBody(), g2.getBody());
 
-            // Attach feedback to detect severe frontal collisions for Torque Cutoff
-            if (isVehicle1 || isVehicle2) {
+            // Attach feedback to detect severe frontal collisions for Torque Cutoff (skip if traversing a climbable step)
+            if ((isVehicle1 || isVehicle2) && !isAdaptiveSki) {
                 if (activeFeedbacks >= feedbackPool.size()) {
                     feedbackPool.add(new DJoint.DJointFeedback());
                 }
