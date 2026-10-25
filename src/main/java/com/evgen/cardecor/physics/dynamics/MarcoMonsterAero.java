@@ -58,12 +58,7 @@ public class MarcoMonsterAero {
         float downforceN = cDownforce * (fwdSpeed * fwdSpeed);
         body.forceAccum.fma(-downforceN, localUp);
 
-        // 3. Tire Rolling Resistance: F_rr = -C_rr * m * g * sign(v_fwd)
-        if (body.groundedWheelsCount > 0 && Math.abs(fwdSpeed) > 0.05f) {
-            float normalWeightN = body.mass * STANDARD_GRAVITY;
-            float rrForce = -Math.signum(fwdSpeed) * groundRollResist * normalWeightN;
-            body.forceAccum.fma(rrForce, localForward);
-        }
+        // 3. Tire Rolling Resistance: перенесено поколесно в OdeVehicleBody (Contact Patch)
     }
 
     /**
@@ -99,11 +94,6 @@ public class MarcoMonsterAero {
         float downforceN = cDownforce * (fwdSpeed * fwdSpeed);
         outForce.fma(-downforceN, localUp);
 
-        // 3. Rolling Resistance
-        if (isGrounded && Math.abs(fwdSpeed) > 0.05f) {
-            float normalWeightN = totalMass * STANDARD_GRAVITY;
-            float rrForce = -Math.signum(fwdSpeed) * groundRollResist * normalWeightN;
-            outForce.fma(rrForce, localForward);
-        }
+        // 3. Rolling Resistance: перенесено поколесно в OdeVehicleBody (Contact Patch)
     }
 }

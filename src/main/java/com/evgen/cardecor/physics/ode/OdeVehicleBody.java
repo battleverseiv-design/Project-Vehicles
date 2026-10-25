@@ -1065,6 +1065,11 @@ public class OdeVehicleBody {
                 float maxStopForce = Math.abs(vx) * (this.mass * 0.25f) / dt;
                 float finalRimDrag = -Math.signum(vx) * Math.min(rimRollingDrag, maxStopForce);
                 fx += finalRimDrag;
+            } else if (Math.abs(vx) > 0.05f) {
+                // Честное поколесное сопротивление качению шины от нормальной нагрузки и покрытия
+                float rollRes = surface.rollingResistance;
+                float rrForce = -Math.signum(vx) * (wheelNormalLoadFz[i] * rollRes);
+                fx += rrForce;
             }
 
             wheelSlipRatio[i] = wheelStates[i].outCombinedSlipNorm;

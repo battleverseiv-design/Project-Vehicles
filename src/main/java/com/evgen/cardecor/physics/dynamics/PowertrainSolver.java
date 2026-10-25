@@ -45,6 +45,8 @@ public class PowertrainSolver {
     public float finalDriveRatio = 3.90f;        // Главная пара
     public float transmissionEfficiency = 0.92f; // КПД трансмиссии
     public float totalDrivenWheelsBaseInertia = 240.0f; // Приведенная базовая инерция шасси [кг*м^2]
+    public float vehicleMassKg = 1650.0f;        // Масса автомобиля для двухмассовой инерции [кг]
+    public float wheelRadiusM = 0.38f;           // Радиус колеса [м]
 
     // --- 4. Состояние (Runtime State) ---
     public float engineOmega = 850.0f * RPM_TO_RAD_S; // Угловая скорость коленвала [рад/с]
@@ -95,6 +97,8 @@ public class PowertrainSolver {
         if (spec.differentialRatio > 0.5f) this.finalDriveRatio = spec.differentialRatio;
         if (spec.reverseGearRatio != 0.0f) this.reverseGearRatio = -Math.abs(spec.reverseGearRatio);
         if (spec.transmissionEfficiency > 0.5f) this.transmissionEfficiency = spec.transmissionEfficiency;
+        if (spec.baseMassKg > 200.0f) this.vehicleMassKg = spec.baseMassKg;
+        if (spec.wheelRadius > 0.1f) this.wheelRadiusM = spec.wheelRadius;
         if (spec.gearRatios != null && spec.gearRatios.length > 0) {
             for (int i = 0; i < Math.min(forwardGearRatios.length, spec.gearRatios.length); i++) {
                 if (spec.gearRatios[i] > 0.1f) {
@@ -182,6 +186,9 @@ public class PowertrainSolver {
         }
 
         float effectiveThrottle = Math.max(userThrottle, idleGovernorThrottle);
+        if (shiftCooldown > 0.0f) {
+            effectiveThrottle = 0.0f; // Rev-matching: сброс газа при переключении передач вверх
+        }
 
         if (currentRpm >= revLimiterRpm) {
             revLimiterCut = true;
@@ -263,7 +270,7 @@ public class PowertrainSolver {
         // 1. Проверка условий принудительного размыкания LOCKED -> SLIP:
         if (isClutchLocked) {
             boolean stallRisk = (transSyncRpm < targetIdleRpm - 50.0f) && (userThrottle < 0.1f);
-            boolean torqueExceeded = Math.abs(netInternalEngineTorque) > (tCap * 1.5f);
+            boolean torqueExceeded = Math.abs(netInternalEngineTorque) > (tCap * 1.18f); // Статический гистерезис 1.18 * tCap
             if (clutchPedalPressed || gear != prevGear || stallRisk || torqueExceeded || smoothedClutchClamp < 0.75f) {
                 isClutchLocked = false;
             }
@@ -280,8 +287,15 @@ public class PowertrainSolver {
             couplingFactor = 1.0f;
         } else {
             // РЕЖИМ 2-DOF (SLIP — ПРОБУКСОВКА ПРИ ТРОГАНИИ ИЛИ ПЕРЕКЛЮЧЕНИИ):
-            // 1. Точный момент (Н*м), необходимый чтобы сравнять валы ровно за 1 подшаг dt без проскока (Overshoot):
-            float exactSyncTorque = (engineInertia / dt) * deltaOmega;
+            // 1. Двухмассовая приведенная инерция двух дисков сцепления:
+            float carMassEq = this.vehicleMassKg * (this.wheelRadiusM * this.wheelRadiusM);
+            float drivenWheelsInertia = 2.8f; // ~2 ведущих колеса
+            float axleInertia = drivenWheelsInertia + carMassEq;
+            float transInertiaEq = axleInertia / Math.max(0.25f, absRatio * absRatio);
+            float effectiveInertia = (engineInertia * transInertiaEq) / (engineInertia + transInertiaEq);
+
+            // Точный момент (Н*м), необходимый чтобы сравнять валы ровно за 1 подшаг dt без проскока (Overshoot):
+            float exactSyncTorque = (effectiveInertia / dt) * deltaOmega;
 
             // 2. Трение сцепления никогда не может превысить exactSyncTorque!
             // Это на 100% исключает провал оборотов мотора ниже transOmega (смену знака deltaOmega).
@@ -342,7 +356,9 @@ public class PowertrainSolver {
 
         // Тепловой баланс сцепления
         float slipHeatWatts = Math.abs(lastClutchTorqueNm) * Math.abs(deltaOmega);
-        float coolWatts = 5.5f * (clutchTempCelsius - 25.0f);
+        // Вентиляция корзины обдувом маховика пропорционально оборотам ДВС:
+        float fanCooling = 5.5f + (engineOmega * 0.018f);
+        float coolWatts = fanCooling * (clutchTempCelsius - 25.0f);
         clutchTempCelsius += ((slipHeatWatts - coolWatts) / 3500.0f) * dt;
         clutchTempCelsius = Math.max(25.0f, clutchTempCelsius);
         isClutchBurning = clutchTempCelsius > 220.0f;
