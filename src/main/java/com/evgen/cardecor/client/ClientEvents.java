@@ -45,7 +45,8 @@ public class ClientEvents {
     private static int shiftDownLatchTicks = 0;
     private static boolean lastShiftUpKeyDown = false;
     private static boolean lastShiftDownKeyDown = false;
-    private static final int SHIFT_LATCH_TICKS = 4;
+    private static boolean lastReverseKeyDown = false;
+    private static final int SHIFT_LATCH_TICKS = 1;
     private static float cameraShakeDecay = 0.0F;
     private static float lastVehicleVisualYaw = Float.NaN;
     private static int lastVehicleId = -1;
@@ -187,6 +188,7 @@ public class ClientEvents {
             int flags = 0;
 
             if (mySeat == 0) {
+                while (mc.options.keySwapOffhand.consumeClick()) {}
                 boolean gasDown = mc.options.keyUp.isDown();
                 boolean brakeDown = mc.options.keyDown.isDown();
 
@@ -303,6 +305,20 @@ public class ClientEvents {
                         flags |= 1024;
                     }
                     shiftDownLatchTicks--;
+                }
+
+                boolean reverseClicked = false;
+                while (ModKeyBindings.KEY_REVERSE_GEAR.consumeClick()) {
+                    reverseClicked = true;
+                }
+                boolean rawRev = InputConstants.isKeyDown(winKeys, GLFW.GLFW_KEY_V);
+                if (rawRev && !lastReverseKeyDown) {
+                    reverseClicked = true;
+                }
+                lastReverseKeyDown = rawRev;
+
+                if (reverseClicked) {
+                    flags |= 4096;
                 }
 
                 while (ModKeyBindings.KEY_HEADLIGHTS.consumeClick()) {
@@ -843,6 +859,11 @@ public class ClientEvents {
         }
 
         if (!(mc.player.getVehicle() instanceof DrivableVehicleEntity vehicle)) return;
+
+        int driverSeat = vehicle.getSeatForPlayer(mc.player);
+        if (driverSeat == 0) {
+            while (mc.options.keySwapOffhand.consumeClick()) {}
+        }
 
         // 1. Dedicated Keybind for seat cycling (Default: X)
         if (ModKeyBindings.KEY_SWITCH_SEAT.consumeClick() || event.getKey() == GLFW.GLFW_KEY_X) {

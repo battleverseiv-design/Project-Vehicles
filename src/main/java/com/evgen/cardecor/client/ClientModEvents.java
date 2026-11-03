@@ -35,6 +35,7 @@ public class ClientModEvents {
         event.register(ModKeyBindings.KEY_DISMOUNT);
         event.register(ModKeyBindings.KEY_SOUND_SETTINGS);
         event.register(ModKeyBindings.KEY_RADIAL_MENU);
+        event.register(ModKeyBindings.KEY_REVERSE_GEAR);
         VehicleSoundConfig.init();
         com.evgen.cardecor.pack.VehiclePackManager.onReloadCallback = ClientVehiclePackLoader::clearCache;
     }

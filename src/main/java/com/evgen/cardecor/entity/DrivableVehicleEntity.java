@@ -3093,6 +3093,12 @@ public class DrivableVehicleEntity extends Entity {
             triggerShiftDown();
         }
 
+        boolean prevReverse = (this.inputFlags & 4096) != 0;
+        boolean newReverse = (inputs & 4096) != 0;
+        if (newReverse && !prevReverse) {
+            triggerToggleReverse();
+        }
+
         this.inputFlags = inputs;
         if (!this.level().isClientSide()) {
             this.entityData.set(BRAKING, isBraking());
@@ -3134,8 +3140,34 @@ public class DrivableVehicleEntity extends Entity {
         }
     }
 
+    public void triggerToggleReverse() {
+        if (this.odeBody != null) {
+            boolean clutch = this.odeBody.powertrain.clutchPedalPressed;
+            double spd = Math.abs(this.odeBody.getSpeedKmh());
+            if (!clutch && spd > 4.0) {
+                handleClutchlessShiftAttempt();
+                return;
+            }
+            int curGear = this.odeBody.powertrain.currentGear;
+            int targetGear = (curGear == -1) ? 1 : -1;
+            this.odeBody.powertrain.selectDirectGear(targetGear);
+            this.entityData.set(GEAR, this.odeBody.powertrain.currentGear);
+            net.minecraft.server.level.ServerPlayer driverPlayer = (this.getFirstPassenger() instanceof net.minecraft.server.level.ServerPlayer sp) ? sp : null;
+            this.level().playSound(driverPlayer, this.getX(), this.getY(), this.getZ(),
+                ModSounds.GEAR_SHIFT.get(), SoundSource.PLAYERS, 0.85F, 0.90F);
+        }
+    }
+
     public void triggerShiftUp() {
         if (this.odeBody != null) {
+            int curGear = this.odeBody.powertrain.currentGear;
+            boolean clutch = this.odeBody.powertrain.clutchPedalPressed;
+            double spd = Math.abs(this.odeBody.getSpeedKmh());
+            boolean requiresClutch = (curGear >= 0);
+            if (requiresClutch && !clutch && spd > 3.0) {
+                handleClutchlessShiftAttempt();
+                return;
+            }
             this.odeBody.powertrain.shiftUp();
             if (this.odeBody.powertrain.justShifted) {
                 this.odeBody.powertrain.justShifted = false;
@@ -3149,6 +3181,14 @@ public class DrivableVehicleEntity extends Entity {
 
     public void triggerShiftDown() {
         if (this.odeBody != null) {
+            int curGear = this.odeBody.powertrain.currentGear;
+            boolean clutch = this.odeBody.powertrain.clutchPedalPressed;
+            double spd = Math.abs(this.odeBody.getSpeedKmh());
+            boolean requiresClutch = (curGear > 1) || (curGear == 0);
+            if (requiresClutch && !clutch && spd > 3.0) {
+                handleClutchlessShiftAttempt();
+                return;
+            }
             this.odeBody.powertrain.shiftDown();
             if (this.odeBody.powertrain.justShifted) {
                 this.odeBody.powertrain.justShifted = false;
@@ -4441,6 +4481,14 @@ public class DrivableVehicleEntity extends Entity {
                 this.entityData.set(QUAT_Y, this.odeBody.currentRotation.y);
                 this.entityData.set(QUAT_Z, this.odeBody.currentRotation.z);
                 this.entityData.set(QUAT_W, this.odeBody.currentRotation.w);
+
+                // Damping of chassis impulse perturbations (mob impacts, deck jumps) back to level at 80 Hz rate:
+                this.physics.chassisDipPitch *= 0.72;
+                this.physics.chassisDipRoll *= 0.72;
+                this.physics.chassisDipY *= 0.72;
+                if (Math.abs(this.physics.chassisDipPitch) < 0.001) this.physics.chassisDipPitch = 0.0;
+                if (Math.abs(this.physics.chassisDipRoll) < 0.001) this.physics.chassisDipRoll = 0.0;
+                if (Math.abs(this.physics.chassisDipY) < 0.0001) this.physics.chassisDipY = 0.0;
             } else {
                 double nextX = this.getX() + deltaMotion.x;
                 double nextY = this.getY() + deltaMotion.y;
@@ -5163,6 +5211,15 @@ public class DrivableVehicleEntity extends Entity {
             }
             this.entityData.set(TIRE_STATUS, tireBits);
 
+            if (this.odeBody != null) {
+                this.physics.chassisDipPitch *= 0.72;
+                this.physics.chassisDipRoll *= 0.72;
+                this.physics.chassisDipY *= 0.72;
+                if (Math.abs(this.physics.chassisDipPitch) < 0.0005) this.physics.chassisDipPitch = 0.0;
+                if (Math.abs(this.physics.chassisDipRoll) < 0.0005) this.physics.chassisDipRoll = 0.0;
+                if (Math.abs(this.physics.chassisDipY) < 0.0001) this.physics.chassisDipY = 0.0;
+            }
+
             float dY = (float) physics.chassisDipY;
             if (Float.isNaN(dY) || Float.isInfinite(dY)) dY = 0.0F;
             this.entityData.set(CHASSIS_DIP_Y, dY);
@@ -5937,6 +5994,24 @@ public class DrivableVehicleEntity extends Entity {
             }
         }
 
+        if (held.getItem() instanceof com.evgen.cardecor.item.VehicleTireItem || held.is(ModItems.VEHICLE_TIRE.get())) {
+            for (int i = 0; i < 4; i++) {
+                Vec3 wp = getWheelWorldPos(i);
+                if (player.getEyePosition().distanceTo(wp) < 2.8) {
+                    return installTire(i, player, held);
+                }
+            }
+        }
+
+        if (held.getItem() instanceof com.evgen.cardecor.item.VehicleRimItem || held.is(ModItems.VEHICLE_RIM.get())) {
+            for (int i = 0; i < 4; i++) {
+                Vec3 wp = getWheelWorldPos(i);
+                if (player.getEyePosition().distanceTo(wp) < 2.8) {
+                    return installRim(i, player, held);
+                }
+            }
+        }
+
         // 2b. Seat installation when holding VEHICLE_SEAT and looking near any seat slot
         if (held.is(ModItems.VEHICLE_SEAT.get())) {
             int maxS = getMaxSeats();
@@ -6364,7 +6439,7 @@ public class DrivableVehicleEntity extends Entity {
         }
 
         // 3. VEHICLE WHEEL ITEM INTERACTION (Mount / Install / Replace wheel on wheel hub)
-        if (held.is(ModItems.VEHICLE_WHEEL.get())) {
+        if (held.is(ModItems.VEHICLE_WHEEL.get()) || held.getItem() instanceof com.evgen.cardecor.item.VehicleWheelItem) {
             if (part.partType.startsWith("wheel_")) {
                 int wheelIndex = switch (part.partType) {
                     case "wheel_fl" -> 0;
@@ -6375,6 +6450,36 @@ public class DrivableVehicleEntity extends Entity {
                 };
                 if (wheelIndex >= 0) {
                     return installWheel(wheelIndex, player, held);
+                }
+            }
+        }
+
+        if (held.getItem() instanceof com.evgen.cardecor.item.VehicleTireItem || held.is(ModItems.VEHICLE_TIRE.get())) {
+            if (part.partType.startsWith("wheel_")) {
+                int wheelIndex = switch (part.partType) {
+                    case "wheel_fl" -> 0;
+                    case "wheel_fr" -> 1;
+                    case "wheel_rl" -> 2;
+                    case "wheel_rr" -> 3;
+                    default -> -1;
+                };
+                if (wheelIndex >= 0) {
+                    return installTire(wheelIndex, player, held);
+                }
+            }
+        }
+
+        if (held.getItem() instanceof com.evgen.cardecor.item.VehicleRimItem || held.is(ModItems.VEHICLE_RIM.get())) {
+            if (part.partType.startsWith("wheel_")) {
+                int wheelIndex = switch (part.partType) {
+                    case "wheel_fl" -> 0;
+                    case "wheel_fr" -> 1;
+                    case "wheel_rl" -> 2;
+                    case "wheel_rr" -> 3;
+                    default -> -1;
+                };
+                if (wheelIndex >= 0) {
+                    return installRim(wheelIndex, player, held);
                 }
             }
         }
@@ -6580,6 +6685,82 @@ public class DrivableVehicleEntity extends Entity {
             String[] wheelNames = {"Переднее левое", "Переднее правое", "Заднее левое", "Заднее правое"};
             String wName = (tDef != null ? tDef.name : "Покрышка") + " + " + (rDef != null ? rDef.name : "Диск");
             player.displayClientMessage(Component.literal("§a[Колеса] §e" + wheelNames[wheelIndex] + " §f(" + wName + ") установлено!"), true);
+        }
+        return InteractionResult.sidedSuccess(this.level().isClientSide);
+    }
+
+    public InteractionResult installTire(int wheelIndex, Player player, ItemStack stack) {
+        if (!this.level().isClientSide) {
+            String newTireId = com.evgen.cardecor.item.VehicleTireItem.getTireId(stack);
+            if (newTireId == null || newTireId.isEmpty()) newTireId = "tire_03_classic_radial";
+
+            if (isWheelInstalled(wheelIndex)) {
+                String oldTireId = getInstalledTireId(wheelIndex);
+                if (oldTireId != null && !oldTireId.isEmpty()) {
+                    ItemStack oldTireItem = com.evgen.cardecor.item.VehicleTireItem.create(oldTireId);
+                    if (!player.getInventory().add(oldTireItem)) {
+                        Vec3 pos = getWheelWorldPos(wheelIndex);
+                        this.level().addFreshEntity(new ItemEntity(this.level(), pos.x, pos.y, pos.z, oldTireItem));
+                    }
+                }
+            } else {
+                setWheelInstalled(wheelIndex, true);
+            }
+
+            String curRimId = getInstalledRimId(wheelIndex);
+            if (curRimId == null || curRimId.isEmpty()) {
+                curRimId = "rim_04_stamped_steelie";
+            }
+            setInstalledWheelId(wheelIndex, newTireId + ";" + curRimId);
+            setWheelInstalled(wheelIndex, true);
+
+            this.wheelHealth[wheelIndex] = 100.0F;
+            this.tireCondition[wheelIndex] = 100.0F;
+            if (physics.tireCondition != null) {
+                this.physics.tireCondition[wheelIndex] = 100.0F;
+            }
+            applyAllWheelsPhysics();
+
+            if (!player.getAbilities().instabuild) {
+                stack.shrink(1);
+            }
+            this.level().playSound(null, this.getX(), this.getY(), this.getZ(),
+                ModSounds.CAR_SUSPENSION_CREAK.get(), SoundSource.PLAYERS, 0.85F, 1.20F);
+        }
+        return InteractionResult.sidedSuccess(this.level().isClientSide);
+    }
+
+    public InteractionResult installRim(int wheelIndex, Player player, ItemStack stack) {
+        if (!this.level().isClientSide) {
+            String newRimId = com.evgen.cardecor.item.VehicleRimItem.getRimId(stack);
+            if (newRimId == null || newRimId.isEmpty()) newRimId = "rim_04_stamped_steelie";
+
+            if (isWheelInstalled(wheelIndex)) {
+                String oldRimId = getInstalledRimId(wheelIndex);
+                if (oldRimId != null && !oldRimId.isEmpty()) {
+                    ItemStack oldRimItem = com.evgen.cardecor.item.VehicleRimItem.create(oldRimId);
+                    if (!player.getInventory().add(oldRimItem)) {
+                        Vec3 pos = getWheelWorldPos(wheelIndex);
+                        this.level().addFreshEntity(new ItemEntity(this.level(), pos.x, pos.y, pos.z, oldRimItem));
+                    }
+                }
+            } else {
+                setWheelInstalled(wheelIndex, true);
+            }
+
+            String curTireId = getInstalledTireId(wheelIndex);
+            if (curTireId == null || curTireId.isEmpty()) {
+                curTireId = "tire_03_classic_radial";
+            }
+            setInstalledWheelId(wheelIndex, curTireId + ";" + newRimId);
+            setWheelInstalled(wheelIndex, true);
+            applyAllWheelsPhysics();
+
+            if (!player.getAbilities().instabuild) {
+                stack.shrink(1);
+            }
+            this.level().playSound(null, this.getX(), this.getY(), this.getZ(),
+                ModSounds.VEHICLE_ITEM_PUT.get(), SoundSource.PLAYERS, 0.85F, 1.10F);
         }
         return InteractionResult.sidedSuccess(this.level().isClientSide);
     }

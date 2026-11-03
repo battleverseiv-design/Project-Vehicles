@@ -116,6 +116,14 @@ public class ModKeyBindings {
         "key.cardecor.radial_menu",
         KeyConflictContext.IN_GAME,
         InputConstants.Type.KEYSYM,
+        GLFW.GLFW_KEY_C,
+        KEY_CATEGORY
+    );
+
+    public static final KeyMapping KEY_REVERSE_GEAR = new KeyMapping(
+        "key.cardecor.reverse_gear",
+        KeyConflictContext.IN_GAME,
+        InputConstants.Type.KEYSYM,
         GLFW.GLFW_KEY_V,
         KEY_CATEGORY
     );

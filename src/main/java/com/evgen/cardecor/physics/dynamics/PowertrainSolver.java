@@ -61,7 +61,10 @@ public class PowertrainSolver {
     public float transmissionCondition = 100.0f;      // Состояние КПП [0..100]
     public boolean isClutchBurning = false;           // Горит ли сцепление
     public float clutchTempCelsius = 25.0f;           // Температура сцепления [°C]
-    public boolean isClutchLocked = false;            // Заблокировано ли сцепление (1-DOF)
+    public boolean isClutchLocked = false;
+    public boolean wasClutchPedalPressed = false;
+    public float clutchKickTimer = 0.0f;
+    public float clutchKickExtraTorque = 0.0f;            // Заблокировано ли сцепление (1-DOF)
 
     private float smoothedClutchClamp = 0.0f;         // Сжатие корзины [0..1]
     private float lastClutchTorqueNm = 0.0f;          // Переданный момент сцепления [Н*м]
@@ -246,7 +249,18 @@ public class PowertrainSolver {
         }
 
         // 5. Плавный контроллер сжатия корзины сцепления
-        float targetClamp;
+                // Clutch Kick detection (RPM dump discharge):
+        if (wasClutchPedalPressed && !clutchPedalPressed) {
+            float rpmDiff = currentRpm - transSyncRpm;
+            if (gear != 0 && rpmDiff > 700.0f) {
+                float kickFactor = clamp((rpmDiff - 700.0f) / 2200.0f, 0.0f, 1.0f);
+                clutchKickTimer = 0.14f;
+                clutchKickExtraTorque = Math.min(1800.0f, maxClutchTorqueNm * (1.3f + 1.7f * kickFactor));
+            }
+        }
+        wasClutchPedalPressed = clutchPedalPressed;
+
+float targetClamp;
         if (clutchPedalPressed) {
             targetClamp = 0.0f;
         } else {
@@ -376,6 +390,11 @@ public class PowertrainSolver {
         }
 
         // 8. Выходной крутящий момент на ведущие колеса
+                if (clutchKickTimer > 0.0f) {
+            clutchKickTimer -= dt;
+            lastClutchTorqueNm = Math.max(lastClutchTorqueNm, clutchKickExtraTorque);
+        }
+
         return lastClutchTorqueNm * totalRatio * transmissionEfficiency;
     }
 

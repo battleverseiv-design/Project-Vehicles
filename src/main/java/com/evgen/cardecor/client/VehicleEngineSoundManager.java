@@ -497,13 +497,15 @@ public class VehicleEngineSoundManager {
             }
         }
 
-        if (!isBraking || curSpeedKmh < 2.0F || !vehicle.onGround()) {
+        if (!isBraking || curSpeedKmh < 4.0F || !vehicle.onGround()) {
             // Instantly kill brake sound instances when not braking or vehicle stopped!
             if (brakeHardSound != null) {
+                brakeHardSound.markStopping();
                 mc.getSoundManager().stop(brakeHardSound);
                 brakeHardSound = null;
             }
             if (brakeSlowSound != null) {
+                brakeSlowSound.markStopping();
                 mc.getSoundManager().stop(brakeSlowSound);
                 brakeSlowSound = null;
             }
@@ -563,10 +565,12 @@ public class VehicleEngineSoundManager {
             tireSnowSound = null;
         }
         if (brakeHardSound != null) {
+            brakeHardSound.markStopping();
             mc.getSoundManager().stop(brakeHardSound);
             brakeHardSound = null;
         }
         if (brakeSlowSound != null) {
+            brakeSlowSound.markStopping();
             mc.getSoundManager().stop(brakeSlowSound);
             brakeSlowSound = null;
         }
