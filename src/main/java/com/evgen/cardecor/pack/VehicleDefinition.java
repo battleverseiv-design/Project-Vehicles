@@ -353,10 +353,15 @@ public class VehicleDefinition {
 
     public static class Wheels {
         public double radius = 0.40;
+        @com.google.gson.annotations.SerializedName(value = "wheel_hp", alternate = {"wheelHp"})
         public double wheelHp = 150.0;
+        @com.google.gson.annotations.SerializedName(value = "front_left", alternate = {"frontLeft"})
         public float[] frontLeft  = new float[]{ 0.95F, 0.38F,  1.50F };
+        @com.google.gson.annotations.SerializedName(value = "front_right", alternate = {"frontRight"})
         public float[] frontRight = new float[]{-0.95F, 0.38F,  1.50F };
+        @com.google.gson.annotations.SerializedName(value = "rear_left", alternate = {"rearLeft"})
         public float[] rearLeft   = new float[]{ 0.95F, 0.38F, -1.50F };
+        @com.google.gson.annotations.SerializedName(value = "rear_right", alternate = {"rearRight"})
         public float[] rearRight  = new float[]{-0.95F, 0.38F, -1.50F };
     }
 

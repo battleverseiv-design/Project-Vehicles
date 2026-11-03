@@ -4392,9 +4392,10 @@ public class DrivableVehicleEntity extends Entity {
                 this.setDeltaMovement(odeDeltaMotion);
                 this.setOnGround(this.odeBody.groundedWheelsCount > 0);
 
-                float curSpeedKmh = (float) this.odeBody.getSpeedKmh();
+                float curSpeedKmh = (float) this.odeBody.getSignedSpeedKmh();
                 this.entityData.set(SPEED, curSpeedKmh);
                 this.physics.speed = curSpeedKmh / 3.6;
+                this.physics.tireScreechIntensity = 0.0f;
 
                 float centerSteer = this.odeBody.steeringRack.getCenterWheelAngle();
                 this.entityData.set(STEER, centerSteer);
@@ -4454,8 +4455,8 @@ public class DrivableVehicleEntity extends Entity {
                 this.setXRot((float) Math.toDegrees(this.physics.pitch));
             }
 
-            // Wake up nearby dormant vehicles within 10 blocks of this moving vehicle
-            if (!this.level().isClientSide && (Math.abs(physics.speed) > 0.05 || this.physics.isBeingPushed)) {
+            // Wake up nearby dormant vehicles within 10 blocks of this moving vehicle (throttled to every 10 ticks for performance)
+            if (!this.level().isClientSide && this.tickCount % 10 == 0 && (Math.abs(physics.speed) > 0.05 || this.physics.isBeingPushed)) {
                 List<DrivableVehicleEntity> nearbyCars = this.level().getEntitiesOfClass(
                     DrivableVehicleEntity.class, 
                     this.getBoundingBox().inflate(10.0), 
@@ -4624,7 +4625,8 @@ public class DrivableVehicleEntity extends Entity {
 
 
 
-            // DynamX-style Continuous Heavy Rigid-Body Pushing (Multi-sphere hull detection & shove)
+            // DynamX-style Continuous Heavy Rigid-Body Pushing (Multi-sphere hull detection & shove) - only active if ODE is disabled
+            if (this.odeBody == null || !this.odeBodyRegistered) {
             AABB carPushBox = this.getBoundingBox().inflate(3.50, 0.50, 3.50);
             List<DrivableVehicleEntity> otherCars = this.level().getEntitiesOfClass(DrivableVehicleEntity.class, carPushBox,
                 other -> other != this && other.isAlive());
@@ -4754,6 +4756,7 @@ public class DrivableVehicleEntity extends Entity {
                         );
                     }
                 }
+            }
             }
 
 
@@ -5924,14 +5927,12 @@ public class DrivableVehicleEntity extends Entity {
             }
         }
 
-        // 2. Wheel replacement when holding VEHICLE_WHEEL and looking near any wheel
-        if (held.is(ModItems.VEHICLE_WHEEL.get())) {
+        // 2. Wheel replacement when holding VEHICLE_WHEEL and looking near any wheel (supports hot-swapping installed wheels)
+        if (held.is(ModItems.VEHICLE_WHEEL.get()) || held.getItem() instanceof com.evgen.cardecor.item.VehicleWheelItem) {
             for (int i = 0; i < 4; i++) {
                 Vec3 wp = getWheelWorldPos(i);
                 if (player.getEyePosition().distanceTo(wp) < 2.8) {
-                    if (!isWheelInstalled(i) || this.physics.isTireFlat(i) || wheelHealth[i] < getMaxWheelHp() || (this.entityData.get(TIRE_STATUS) & (1 << i)) != 0) {
-                        return installWheel(i, player, held);
-                    }
+                    return installWheel(i, player, held);
                 }
             }
         }
@@ -6373,12 +6374,7 @@ public class DrivableVehicleEntity extends Entity {
                     default -> -1;
                 };
                 if (wheelIndex >= 0) {
-                    // Install if missing, broken, or flat tire!
-                    if (!isWheelInstalled(wheelIndex) || this.physics.isTireFlat(wheelIndex) || wheelHealth[wheelIndex] < getMaxWheelHp() || (this.entityData.get(TIRE_STATUS) & (1 << wheelIndex)) != 0) {
-                        return installWheel(wheelIndex, player, held);
-                    } else {
-                        return InteractionResult.sidedSuccess(this.level().isClientSide);
-                    }
+                    return installWheel(wheelIndex, player, held);
                 }
             }
         }
@@ -6538,6 +6534,19 @@ public class DrivableVehicleEntity extends Entity {
 
     public InteractionResult installWheel(int wheelIndex, Player player, ItemStack stack) {
         if (!this.level().isClientSide) {
+            // Hot-swap: return previously installed wheel back to player inventory
+            if (isWheelInstalled(wheelIndex)) {
+                String oldTireId = getInstalledTireId(wheelIndex);
+                String oldRimId = getInstalledRimId(wheelIndex);
+                if (oldTireId != null && !oldTireId.isEmpty()) {
+                    ItemStack oldWheel = com.evgen.cardecor.item.VehicleWheelItem.createWheel(oldTireId, oldRimId != null ? oldRimId : "standard_rim");
+                    if (!player.getInventory().add(oldWheel)) {
+                        Vec3 pos = getWheelWorldPos(wheelIndex);
+                        this.level().addFreshEntity(new ItemEntity(this.level(), pos.x, pos.y, pos.z, oldWheel));
+                    }
+                }
+            }
+
             String tireId = com.evgen.cardecor.item.VehicleWheelItem.getTireId(stack);
             String rimId = com.evgen.cardecor.item.VehicleWheelItem.getRimId(stack);
             String wheelCompound = tireId + ";" + rimId;
@@ -7188,10 +7197,10 @@ public class DrivableVehicleEntity extends Entity {
 
                 // Physical deck load under player weight (smooth continuous dynamic tilt across entire vehicle surface):
                 double sens = this.physics.weightDipSensitivity;
-                float dipY = (float) ((isInsideCargoBed ? 0.032 : 0.024) * sens);
+                float dipY = (float) ((isInsideCargoBed ? 0.018 : 0.012) * sens);
                 totalDeckStaticDipY -= dipY;
-                totalDeckStaticPitch += (float) (localFwd * -0.018 * sens);
-                totalDeckStaticRoll += (float) (localLat * 0.020 * sens);
+                totalDeckStaticPitch += (float) (localFwd * -0.005 * sens);
+                totalDeckStaticRoll += (float) (localLat * 0.006 * sens);
                 if (isInsideCargoBed && this.physics != null && this.physics.suspensionCompressions != null && this.physics.suspensionCompressions.length >= 4) {
                     this.physics.suspensionCompressions[2] = (float) Math.min(0.12, this.physics.suspensionCompressions[2] + 0.035 * sens);
                     this.physics.suspensionCompressions[3] = (float) Math.min(0.12, this.physics.suspensionCompressions[3] + 0.035 * sens);
@@ -7544,7 +7553,7 @@ public class DrivableVehicleEntity extends Entity {
             if (deckEntityCount > 0) {
                 float avgPitch = totalDeckStaticPitch / (float) deckEntityCount;
                 float avgRoll = totalDeckStaticRoll / (float) deckEntityCount;
-                float clampedDipY = Math.max(-0.095F, totalDeckStaticDipY);
+                float clampedDipY = Math.max(-0.035F, totalDeckStaticDipY);
                 this.physics.extraStaticDipY += (clampedDipY - this.physics.extraStaticDipY) * 0.35;
                 this.physics.extraStaticPitch += (avgPitch - this.physics.extraStaticPitch) * 0.35;
                 this.physics.extraStaticRoll += (avgRoll - this.physics.extraStaticRoll) * 0.35;

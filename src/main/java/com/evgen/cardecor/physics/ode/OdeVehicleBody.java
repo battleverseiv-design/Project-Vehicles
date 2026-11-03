@@ -1261,6 +1261,15 @@ public class OdeVehicleBody {
         return Math.sqrt(vel.get0() * vel.get0() + vel.get1() * vel.get1() + vel.get2() * vel.get2()) * 3.6;
     }
 
+    public double getSignedSpeedKmh() {
+        if (body == null) return 0.0;
+        DVector3C vel = body.getLinearVel();
+        DMatrix3C rot = body.getRotation();
+        // Dot product with vehicle forward vector (-rot.get02(), -rot.get12(), -rot.get22())
+        double fwdSpeed = vel.get0() * (-rot.get02()) + vel.get1() * (-rot.get12()) + vel.get2() * (-rot.get22());
+        return fwdSpeed * 3.6;
+    }
+
     public void wakeUp() {
         if (body != null) {
             body.enable();

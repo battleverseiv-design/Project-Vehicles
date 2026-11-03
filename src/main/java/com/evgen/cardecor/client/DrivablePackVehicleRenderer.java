@@ -267,11 +267,7 @@ public class DrivablePackVehicleRenderer extends EntityRenderer<DrivablePackVehi
         float chassisDipRoll = Mth.lerp(partialTicks, entity.prevChassisDipRoll, entity.currentChassisDipRoll);
 
         poseStack.pushPose();
-        if (Math.abs(chassisDipPitch) > 0.01F || Math.abs(chassisDipRoll) > 0.01F || Math.abs(chassisDipY) > 0.001F) {
-            poseStack.translate(0.0F, chassisDipY, 0.0F);
-            poseStack.mulPose(Axis.XP.rotationDegrees(chassisDipPitch));
-            poseStack.mulPose(Axis.ZP.rotationDegrees(chassisDipRoll));
-        }
+        // Wheels are grounded at suspension hub height; chassis pitch/dip is applied strictly to the body, not wheels.
 
         float[] fl = def.wheels.frontLeft;
         float[] fr = def.wheels.frontRight;
