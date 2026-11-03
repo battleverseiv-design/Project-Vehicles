@@ -85,6 +85,25 @@ public final class SteeringRack {
     public void update(float driverInput, float fyLeft, float fyRight,
                        float thetaLeft, float thetaRight,
                        float trackWidth, float wheelbase, float dt) {
+        update(driverInput, fyLeft, fyRight, thetaLeft, thetaRight, trackWidth, wheelbase, 1.0f, dt);
+    }
+
+    /**
+     * Динамическое обновление рулевой рейки с учетом восстанавливающего момента и направления движения.
+     *
+     * @param driverInput   ввод водителя (-1.0 .. +1.0)
+     * @param fyLeft        поперечная сила левой шины FL [Н]
+     * @param fyRight       поперечная сила правой шины FR [Н]
+     * @param thetaLeft     безразмерный сдвиг щетинок FL
+     * @param thetaRight    безразмерный сдвиг щетинок FR
+     * @param trackWidth    колея [м]
+     * @param wheelbase     колесная база [м]
+     * @param forwardSpeed  продольная скорость автомобиля [м/с]
+     * @param dt            шаг моделирования (0.0125 с)
+     */
+    public void update(float driverInput, float fyLeft, float fyRight,
+                       float thetaLeft, float thetaRight,
+                       float trackWidth, float wheelbase, float forwardSpeed, float dt) {
 
         // 1. Момент водителя с насыщением по силе рук (без мгновенной установки угла)
         float tauDriver = Math.max(-this.maxDriverTorque, Math.min(this.maxDriverTorque, driverInput * this.maxDriverTorque));
@@ -94,8 +113,20 @@ public final class SteeringRack {
         float tpR = calculatePneumaticTrail(thetaRight);
 
         // 3. Восстанавливающие моменты вокруг шкворней (Kingpin Torque)
-        float tauKpL = -fyLeft * (tpL + this.mechanicalTrail);
-        float tauKpR = -fyRight * (tpR + this.mechanicalTrail);
+        // При движении задом трейл инвертируется относительно вектора движения
+        float motionSign = (forwardSpeed < -0.1f) ? -1.0f : 1.0f;
+        float tauKpL = -fyLeft * (tpL + this.mechanicalTrail) * motionSign;
+        float tauKpR = -fyRight * (tpR + this.mechanicalTrail) * motionSign;
+
+        // При движении задом без активного ввода водителя усиливаем центрирующее сопротивление,
+        // предотвращая паразитные автоколебания («виляние тележки»)
+        float effectiveDamping = this.steeringDamping;
+        if (forwardSpeed < -0.1f) {
+            effectiveDamping *= (Math.abs(driverInput) < 0.05f) ? 4.5f : 2.0f;
+            if (Math.abs(driverInput) < 0.05f) {
+                tauDriver -= this.steeringWheelAngle * 12.0f;
+            }
+        }
 
         // Момент от шин, приведенный к рулевому валу
         float tauTireTotal = (tauKpL + tauKpR) / this.steeringRatio;
@@ -108,7 +139,7 @@ public final class SteeringRack {
         for (int step = 0; step < subSteps; step++) {
             // Полунеявный симплектический шаг (Semi-Implicit Euler с вязким затуханием)
             float totalTorque = tauDriver + tauTireTotal;
-            float dampingFactor = 1.0f + (this.steeringDamping * subDt) / this.steeringInertia;
+            float dampingFactor = 1.0f + (effectiveDamping * subDt) / this.steeringInertia;
 
             this.steeringWheelVelocity = (this.steeringWheelVelocity + (totalTorque / this.steeringInertia) * subDt) / dampingFactor;
 

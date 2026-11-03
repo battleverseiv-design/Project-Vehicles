@@ -544,8 +544,9 @@ public class OdeVehicleBody {
 
                 // Dynamic mount Y: strut top is located (L_rest - x_static) above the wheel axle center
                 float quarterMass = this.mass * 0.25f;
-                float xStaticFront = (quarterMass * 9.80665f) / Math.max(1000.0f, this.springStiffness);
-                float xStaticRear = (quarterMass * 9.80665f) / Math.max(1000.0f, this.springStiffness);
+                float odeGravity = 18.0f;
+                float xStaticFront = (quarterMass * odeGravity) / Math.max(1000.0f, this.springStiffness);
+                float xStaticRear = (quarterMass * odeGravity) / Math.max(1000.0f, this.springStiffness);
 
                 float mountYFront = (flY - this.comHeight) + (this.suspensionRestLength - xStaticFront);
                 float mountYRear = (rlY - this.comHeight) + (this.suspensionRestLength - xStaticRear);
@@ -602,6 +603,10 @@ public class OdeVehicleBody {
     }
 
     public float updateSteeringAngleRad(float rawSteerInput, float dt) {
+        return updateSteeringAngleRad(rawSteerInput, 0.0f, dt);
+    }
+
+    public float updateSteeringAngleRad(float rawSteerInput, float forwardSpeed, float dt) {
         float trackW = Math.max(0.8f, Math.abs(wheelMountsLocal[0].x - wheelMountsLocal[1].x));
         float wheelB = Math.max(1.0f, Math.abs(wheelMountsLocal[0].z - wheelMountsLocal[2].z));
 
@@ -613,6 +618,7 @@ public class OdeVehicleBody {
                 wheelStates[1].outSlipAngleTanNorm,
                 trackW,
                 wheelB,
+                forwardSpeed,
                 dt
         );
 
@@ -732,7 +738,7 @@ public class OdeVehicleBody {
 
         groundedWheelsCount = 0;
 
-        float steerAngleRad = updateSteeringAngleRad(this.steerInput, dt);
+        float steerAngleRad = updateSteeringAngleRad(this.steerInput, forwardSpeedMps, dt);
         float cosSteerL = (float) Math.cos(steeringRack.leftWheelAngle);
         float sinSteerL = (float) Math.sin(steeringRack.leftWheelAngle);
         float cosSteerR = (float) Math.cos(steeringRack.rightWheelAngle);
@@ -928,21 +934,30 @@ public class OdeVehicleBody {
                 if (compRatio > 0.65f) {
                     fSusp *= (1.0f + (compRatio - 0.65f) * 3.8f);
                 }
-                float maxWheelForce = (this.mass * 18.0f) * 1.5f;
+                if (rampLift > 0.02f && this.traversal != null && this.traversal.suspensionStepBoost > 1.0f) {
+                    fSusp *= this.traversal.suspensionStepBoost;
+                }
+                float maxWheelForce = (this.mass * 18.0f) * 2.5f;
                 fSusp = Mth.clamp((float) fSusp, 0.0f, maxWheelForce);
                 fSusp = BulletWheelFriction.applySafeSurfaceRoughness((float) fSusp, surface, (float) wx, (float) wz, forwardSpeedMps);
                 wheelSpringForce[i] = (float) fSusp;
 
-                // Step-Up Assist: Мягкий накат вдоль виртуального пандуса на блок (до 1.05м)
+                // Step-Up Assist: преодоление уступов (до 1.05м)
                 float maxStep = this.traversal != null ? this.traversal.maxStepHeight : WheelStepUpProbe.MAX_STEP_HEIGHT;
-                float assistRatio = this.traversal != null ? (this.traversal.stepClimbAssist * 0.24f) : 0.32f;
+                float assistRatio = this.traversal != null ? this.traversal.stepClimbAssist : 1.35f;
                 if (rampLift > 0.02f && assistRatio > 0.01f && maxStep > 0.15f) {
-                    float climbAssistForce = (this.mass * 9.81f * assistRatio) * (rampLift / maxStep);
-                    body.addForce(
-                            moveDirX * climbAssistForce * 0.4f,
-                            climbAssistForce,
-                            moveDirZ * climbAssistForce * 0.4f
-                    );
+                    float stepProgress = Math.min(1.0f, rampLift / maxStep);
+                    float climbLiftForce = (this.mass * 18.0f * 0.35f * assistRatio) * stepProgress;
+                    float forwardBoost = (this.mass * 18.0f * 0.25f * assistRatio) * stepProgress;
+
+                    float wmx = wheelMountWorld[i][0];
+                    float wmy = wheelMountWorld[i][1];
+                    float wmz = wheelMountWorld[i][2];
+                    float fx = moveDirX * forwardBoost;
+                    float fy = climbLiftForce;
+                    float fz = moveDirZ * forwardBoost;
+                    body.addForce(fx, fy, fz);
+                    body.addTorque(wmy * fz - wmz * fy, wmz * fx - wmx * fz, wmx * fy - wmy * fx);
                 }
             } else {
                 wheelGrounded[i] = false;
@@ -981,8 +996,8 @@ public class OdeVehicleBody {
                 float fn = wheelNormalLoadFz[i];
                 // Реакция опоры прикладывается вдоль нормали контакта (а не наклонного кузова):
                 // Исключает паразитную продольную тягу и обеспечивает честное удержание кузова против силы тяжести.
-                Vector3f cN = wheelContactNormal[i];
-                float fsX = cN.x * fn, fsY = cN.y * fn, fsZ = cN.z * fn;
+                // Выталкивающая реакция пружины стойки действует вдоль оси стойки кузова (upX, upY, upZ)
+                float fsX = upX * fn, fsY = upY * fn, fsZ = upZ * fn;
                 float mx = wheelMountWorld[i][0];
                 float my = wheelMountWorld[i][1];
                 float mz = wheelMountWorld[i][2];

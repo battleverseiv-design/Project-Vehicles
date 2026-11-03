@@ -293,9 +293,9 @@ public class OdePhysicsWorld {
                 double toCarZ = v.body.getPosition().get2() - boxPos.get2();
                 double horizLen = Math.sqrt(toCarX * toCarX + toCarZ * toCarZ);
                 if (horizLen > 0.001) {
-                    skiNx = (toCarX / horizLen) * 0.40;
-                    skiNy = 0.916;
-                    skiNz = (toCarZ / horizLen) * 0.40;
+                    skiNx = (toCarX / horizLen) * 0.15;
+                    skiNy = 0.988;
+                    skiNz = (toCarZ / horizLen) * 0.15;
                 } else {
                     skiNx = 0.0;
                     skiNy = 1.0;
