@@ -934,30 +934,20 @@ public class OdeVehicleBody {
                 if (compRatio > 0.65f) {
                     fSusp *= (1.0f + (compRatio - 0.65f) * 3.8f);
                 }
-                if (rampLift > 0.02f && this.traversal != null && this.traversal.suspensionStepBoost > 1.0f) {
-                    fSusp *= this.traversal.suspensionStepBoost;
-                }
-                float maxWheelForce = (this.mass * 18.0f) * 2.5f;
+                float maxWheelForce = (this.mass * 18.0f) * 1.5f;
                 fSusp = Mth.clamp((float) fSusp, 0.0f, maxWheelForce);
                 fSusp = BulletWheelFriction.applySafeSurfaceRoughness((float) fSusp, surface, (float) wx, (float) wz, forwardSpeedMps);
                 wheelSpringForce[i] = (float) fSusp;
 
-                // Step-Up Assist: преодоление уступов (до 1.05м)
+                // Step-Up Assist: плавный накат на 1-блочные уступы без катапультирования
                 float maxStep = this.traversal != null ? this.traversal.maxStepHeight : WheelStepUpProbe.MAX_STEP_HEIGHT;
                 float assistRatio = this.traversal != null ? this.traversal.stepClimbAssist : 1.35f;
-                if (rampLift > 0.02f && assistRatio > 0.01f && maxStep > 0.15f) {
+                boolean isClimbingIntent = isFront && hasDriveIntent && forwardSpeedMps > -0.05f && this.throttleInput > 0.05f;
+                if (isClimbingIntent && rampLift > 0.03f && assistRatio > 0.01f && maxStep > 0.15f) {
                     float stepProgress = Math.min(1.0f, rampLift / maxStep);
-                    float climbLiftForce = (this.mass * 18.0f * 0.35f * assistRatio) * stepProgress;
-                    float forwardBoost = (this.mass * 18.0f * 0.25f * assistRatio) * stepProgress;
-
-                    float wmx = wheelMountWorld[i][0];
-                    float wmy = wheelMountWorld[i][1];
-                    float wmz = wheelMountWorld[i][2];
-                    float fx = moveDirX * forwardBoost;
-                    float fy = climbLiftForce;
-                    float fz = moveDirZ * forwardBoost;
-                    body.addForce(fx, fy, fz);
-                    body.addTorque(wmy * fz - wmz * fy, wmz * fx - wmx * fz, wmx * fy - wmy * fx);
+                    // Мягкий поддерживающий подъем передней оси без подпрыгивания (закон сохранения энергии)
+                    float climbLiftForce = (this.mass * 18.0f * 0.06f * assistRatio) * stepProgress;
+                    body.addForce(0.0f, climbLiftForce, 0.0f);
                 }
             } else {
                 wheelGrounded[i] = false;
@@ -994,10 +984,14 @@ public class OdeVehicleBody {
         for (int i = 0; i < 4; i++) {
             if (wheelGrounded[i] && wheelNormalLoadFz[i] > 0.001f) {
                 float fn = wheelNormalLoadFz[i];
-                // Реакция опоры прикладывается вдоль нормали контакта (а не наклонного кузова):
-                // Исключает паразитную продольную тягу и обеспечивает честное удержание кузова против силы тяжести.
-                // Выталкивающая реакция пружины стойки действует вдоль оси стойки кузова (upX, upY, upZ)
-                float fsX = upX * fn, fsY = upY * fn, fsZ = upZ * fn;
+                // Реакция опоры: на ровной поверхности строго вертикальна (0, fn, 0),
+                // исключая появление паразитной кинетической энергии (закон сохранения энергии).
+                Vector3f cN = wheelContactNormal[i];
+                float nx = cN.x, ny = cN.y, nz = cN.z;
+                if (ny < 0.55f) {
+                    nx = 0.0f; ny = 1.0f; nz = 0.0f; // Поддержка против силы тяжести
+                }
+                float fsX = nx * fn, fsY = ny * fn, fsZ = nz * fn;
                 float mx = wheelMountWorld[i][0];
                 float my = wheelMountWorld[i][1];
                 float mz = wheelMountWorld[i][2];
@@ -1063,17 +1057,21 @@ public class OdeVehicleBody {
             if (handbrakeInput && !isFront) {
                 driveT = 0.0f;
                 brakeT = 4500.0f; // Handbrake clamps rear disc on 100%
+            } else if (!powertrain.isEngineOn) {
+                // При заглушенном двигателе автомобиль на парковке: надежная фиксация колес (E = 0)
+                driveT = 0.0f;
+                brakeT = 3000.0f;
             } else if (powertrain.isBraking) {
                 driveT = 0.0f;
                 brakeT = isFront ? 3500.0f : 2500.0f; // Front-biased service brakes
             } else if (isDriven) {
                 driveT = isPopped ? (driveTorquePerWheel * 0.70f) : driveTorquePerWheel;
-                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? (isFront ? 35.0f : 65.0f) : 150.0f) : 0.0f;
+                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? (isFront ? 35.0f : 65.0f) : 250.0f) : 0.0f;
             } else {
                 driveT = 0.0f;
                 // Non-driven wheels rotate freely when accelerating or rolling;
                 // when stopped (< 0.1 m/s) and off-throttle, apply holding brake to prevent creep
-                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? 15.0f : 120.0f) : 0.0f;
+                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? 15.0f : 200.0f) : 0.0f;
             }
 
             // Гарантируем отсутствие паразитного торможения на ВСЕХ 4 колесах при нажатом газе
