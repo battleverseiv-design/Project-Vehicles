@@ -461,6 +461,8 @@ public class OdeVehicleBody {
 
             if (def.physics.dragCoefficient > 0.05) {
                 this.powertrainSpec.dragCd = (float) def.physics.dragCoefficient;
+            } else {
+                this.powertrainSpec.dragCd = 0.55f; // Authentic off-road SUV / truck aerodynamic drag
             }
             if (def.physics.frontalArea > 0.5) {
                 this.powertrainSpec.frontalAreaM2 = (float) def.physics.frontalArea;
@@ -846,15 +848,7 @@ public class OdeVehicleBody {
                     double dFromStart = rayStart.distanceTo(hit.getLocation());
                     double dFromMount = Math.max(0.0, dFromStart - rayUp);
 
-                    // Проекция наклонного луча на нормаль поверхности:
-                    // Устраняет ложное удлинение луча при дифференте (d = h / cos(theta)),
-                    // предотвращая прогрессирующее проваливание носа в землю.
-                    Direction hitDir = hit.getDirection();
-                    double nX = hitDir.getStepX(), nY = hitDir.getStepY(), nZ = hitDir.getStepZ();
-                    double dotN = upX * nX + upY * nY + upZ * nZ;
-                    if (dotN > 0.1) {
-                        dFromMount *= dotN;
-                    }
+                    // Direct ray distance along suspension axis (eliminates artificial dotN compression error)
 
                     tempProbeDistances[j] = dFromMount;
                     if (bestHit == null || j == 0) {
@@ -954,6 +948,16 @@ public class OdeVehicleBody {
                 wheelHitDist[i] = castDist;
                 wheelSpringForce[i] = 0.0f;
             }
+        }
+
+        // Airborne 6-DOF Stabilization & Aerodynamic Drag
+        // When all 4 wheels leave the ground, increase damping to prevent endless floating and catapult tumbling
+        if (groundedWheelsCount == 0) {
+            body.setAngularDamping(0.12);
+            body.setLinearDamping(0.02);
+        } else {
+            body.setAngularDamping(0.002);
+            body.setLinearDamping(0.001);
         }
 
         // 5. PASS 2: Anti-Roll Bar Weight Transfer & Suspension Chassis Reaction
@@ -1066,12 +1070,12 @@ public class OdeVehicleBody {
                 brakeT = isFront ? 3500.0f : 2500.0f; // Front-biased service brakes
             } else if (isDriven) {
                 driveT = isPopped ? (driveTorquePerWheel * 0.70f) : driveTorquePerWheel;
-                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? (isFront ? 35.0f : 65.0f) : 250.0f) : 0.0f;
+                // Authentic engine braking (off-throttle coasting drag) preventing floating sensation
+                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? (isFront ? 180.0f : 240.0f) : 250.0f) : 0.0f;
             } else {
                 driveT = 0.0f;
-                // Non-driven wheels rotate freely when accelerating or rolling;
-                // when stopped (< 0.1 m/s) and off-throttle, apply holding brake to prevent creep
-                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? 15.0f : 200.0f) : 0.0f;
+                // Non-driven wheels rotate freely when accelerating; realistic coasting drag off-throttle
+                brakeT = (Math.abs(throttleInput) < 0.01f) ? (Math.abs(forwardSpeedMps) > 0.1f ? 120.0f : 200.0f) : 0.0f;
             }
 
             // Гарантируем отсутствие паразитного торможения на ВСЕХ 4 колесах при нажатом газе
@@ -1148,10 +1152,30 @@ public class OdeVehicleBody {
             float vertDist = tempContactArm.dot(tempLocalUp);
             tempAdjustedArm.set(tempContactArm).fma(-vertDist * (1.0f - powertrainSpec.rollInfluence), tempLocalUp);
 
-            // Transform local tire forces to world space and apply to ODE4J body
-            float fwX = curWheelFwd.x * fx + curWheelRight.x * fy;
-            float fwY = curWheelFwd.y * fx + curWheelRight.y * fy;
-            float fwZ = curWheelFwd.z * fx + curWheelRight.z * fy;
+            // Surface tangent projection: tire traction and lateral grip act strictly in the contact plane (F · N = 0).
+            // Completely eliminates parasitic downward pulling and progressive sinking into the ground under acceleration/pitch.
+            Vector3f cN = wheelContactNormal[i];
+            float snx = (cN.y >= 0.55f) ? cN.x : 0.0f;
+            float sny = (cN.y >= 0.55f) ? cN.y : 1.0f;
+            float snz = (cN.y >= 0.55f) ? cN.z : 0.0f;
+
+            float dotFwdN = curWheelFwd.x * snx + curWheelFwd.y * sny + curWheelFwd.z * snz;
+            float tfwdX = curWheelFwd.x - snx * dotFwdN;
+            float tfwdY = curWheelFwd.y - sny * dotFwdN;
+            float tfwdZ = curWheelFwd.z - snz * dotFwdN;
+            float lenFwd = (float) Math.sqrt(tfwdX * tfwdX + tfwdY * tfwdY + tfwdZ * tfwdZ);
+            if (lenFwd > 0.001f) { tfwdX /= lenFwd; tfwdY /= lenFwd; tfwdZ /= lenFwd; }
+
+            float dotRightN = curWheelRight.x * snx + curWheelRight.y * sny + curWheelRight.z * snz;
+            float trightX = curWheelRight.x - snx * dotRightN;
+            float trightY = curWheelRight.y - sny * dotRightN;
+            float trightZ = curWheelRight.z - snz * dotRightN;
+            float lenRight = (float) Math.sqrt(trightX * trightX + trightY * trightY + trightZ * trightZ);
+            if (lenRight > 0.001f) { trightX /= lenRight; trightY /= lenRight; trightZ /= lenRight; }
+
+            float fwX = tfwdX * fx + trightX * fy;
+            float fwY = tfwdY * fx + trightY * fy;
+            float fwZ = tfwdZ * fx + trightZ * fy;
 
             body.addForce(fwX, fwY, fwZ);
             body.addTorque(
@@ -1217,6 +1241,18 @@ public class OdeVehicleBody {
         float rightY = (float) rot.get10(); // +Col 0 is TrueRight
         float upY = (float) rot.get11();
         return (float) Math.toDegrees(Math.atan2(rightY, upY));
+    }
+
+    public void setWheelRadius(float radius) {
+        if (radius < 0.1f || Math.abs(this.wheelRadius - radius) < 0.001f) return;
+        this.wheelRadius = radius;
+        this.powertrainSpec.wheelRadius = radius;
+        float confWheelInertia = 0.5f * 22.0f * (this.wheelRadius * this.wheelRadius);
+        for (int i = 0; i < 4; i++) {
+            this.wheelStates[i].init(this.wheelRadius, confWheelInertia);
+            this.wheelProbes[i] = new WheelProbe(this.wheelRadius, PROBE_THETA);
+        }
+        rebuildSuspensionSpecs();
     }
 
     public double getSpeedKmh() {

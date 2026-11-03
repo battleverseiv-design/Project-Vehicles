@@ -14,7 +14,7 @@
     "chassis": "textures/wrangler.png"
   },
   "wheels": {
-    "radius": 0.5,
+    "radius": 0.56,
     "width": 0.375,
     "wheel_hp": 160.0,
     "health": 160.0,
@@ -113,7 +113,7 @@
     "engine_type": "i6",
     "wheelbase": 3.125,
     "track_width": 1.9376,
-    "wheel_radius": 0.5,
+    "wheel_radius": 0.56,
     "steering_angle_deg": 38.0,
     "steering_response": 1.2,
     "turn_in_bite": 1.15,

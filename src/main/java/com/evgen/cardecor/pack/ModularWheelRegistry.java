@@ -76,6 +76,10 @@ public class ModularWheelRegistry {
         registerTire("tire_05_low_profile", "Low Profile Sport (Низкопрофильная)", "sport", 0.35, 0.24, 1.30, 0.50, 0.15, 9.0, 130.0, "models/wheels/tires/tire_05_low_profile.obj");
         // 6. Commercial HD
         registerTire("tire_06_commercial_hd", "Commercial Heavy-Duty (Грузовая)", "commercial", 0.41, 0.25, 0.90, 0.95, 0.30, 15.0, 300.0, "models/wheels/tires/tire_06_commercial_hd.obj");
+        // 7. Extreme Rock Crawler 38"
+        registerTire("tire_07_rock_crawler", "38-Inch Extreme Rock Crawler", "crawler", 0.52, 0.30, 0.82, 1.48, 0.35, 18.0, 350.0, "models/wheels/tires/tire_01_offroad_mud.obj");
+        // 8. Monster King of the Hammers 44"
+        registerTire("tire_08_monster_crawler", "44-Inch King of the Hammers Monster", "monster", 0.62, 0.36, 0.75, 1.68, 0.35, 25.0, 480.0, "models/wheels/tires/tire_01_offroad_mud.obj");
     }
 
     private static void registerTire(String id, String name, String type, double radius, double width, double asphalt, double dirt, double ice, double mass, double hp, String model) {

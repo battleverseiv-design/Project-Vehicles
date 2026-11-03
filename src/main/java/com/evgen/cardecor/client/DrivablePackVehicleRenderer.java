@@ -360,6 +360,9 @@ public class DrivablePackVehicleRenderer extends EntityRenderer<DrivablePackVehi
                     poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
                 }
                 float mScale = (float) ((def.wheels != null && def.wheels.radius > 0.05) ? (def.wheels.radius / 0.375) * 1.15F : 1.2F);
+                if (tDef != null && tDef.radius > 0.05) {
+                    mScale *= (float) (tDef.radius / 0.38);
+                }
                 poseStack.scale(mScale, mScale, mScale);
                 if (tireModel != null) {
                     tireModel.render(poseStack, wheelVc, safePackedLight, OverlayTexture.NO_OVERLAY);
@@ -457,6 +460,9 @@ public class DrivablePackVehicleRenderer extends EntityRenderer<DrivablePackVehi
                 poseStack.translate(-0.027F, 1.369F, 0.401F);
                 poseStack.mulPose(Axis.YP.rotationDegrees(90.0F)); // Rotate to stand vertically against bulkhead
                 float mScale = (float) ((def.wheels != null && def.wheels.radius > 0.05) ? (def.wheels.radius / 0.375) * 1.15F : 1.2F);
+                if (tDef != null && tDef.radius > 0.05) {
+                    mScale *= (float) (tDef.radius / 0.38);
+                }
                 poseStack.scale(mScale, mScale, mScale);
                 if (tireModel != null) {
                     tireModel.render(poseStack, spareVc, safePackedLight, OverlayTexture.NO_OVERLAY);

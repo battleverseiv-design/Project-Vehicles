@@ -938,6 +938,8 @@ public class DrivableVehicleEntity extends Entity {
         }
         if ("offroad_heavy_wheel".equalsIgnoreCase(wId)) return "tire_01_offroad_mud";
         if ("sport_alloy_wheel".equalsIgnoreCase(wId)) return "tire_05_low_profile";
+        if ("crawler_extreme_wheel".equalsIgnoreCase(wId)) return "tire_07_rock_crawler";
+        if ("monster_wheel".equalsIgnoreCase(wId)) return "tire_08_monster_crawler";
         if (com.evgen.cardecor.pack.ModularWheelRegistry.getTire(wId) != null && (!"tire_03_classic_radial".equals(com.evgen.cardecor.pack.ModularWheelRegistry.getTire(wId).id) || "tire_03_classic_radial".equals(wId))) {
             return wId;
         }
@@ -1057,10 +1059,14 @@ public class DrivableVehicleEntity extends Entity {
             }
         }
         if (count > 0) {
+            float effRadius = (float) (avgRadius / count);
             this.physics.tireGripAsphalt = avgAsphalt / count;
             this.physics.tireGripDirt = avgDirt / count;
             this.physics.tireGripIce = avgIce / count;
-            this.physics.wheelRadius = avgRadius / count;
+            this.physics.wheelRadius = effRadius;
+            if (this.odeBody != null) {
+                this.odeBody.setWheelRadius(effRadius);
+            }
         } else {
             this.physics.tireGripAsphalt = 0.05F;
             this.physics.tireGripDirt = 0.05F;
